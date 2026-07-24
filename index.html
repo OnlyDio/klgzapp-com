@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="klgzapp · 将包名、业务类型、上线日期编码为 32 位可逆字符串。" />
+  <title>klgzapp · App Code</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true">
+    <div class="atmosphere__grid"></div>
+    <div class="atmosphere__glow atmosphere__glow--a"></div>
+    <div class="atmosphere__glow atmosphere__glow--b"></div>
+  </div>
+
+  <main class="shell">
+    <header class="brand">
+      <p class="brand__mark">klgzapp</p>
+      <h1 class="brand__title">App Code</h1>
+      <p class="brand__lede">包名 + 业务类型 + 上线日期 → 32 位可逆编码 · 本地计算</p>
+    </header>
+
+    <section>
+      <div class="panel">
+        <h2 class="panel__title">编码</h2>
+        <form id="encode-form" class="form-grid">
+          <label class="field field--wide">
+            <span>包名</span>
+            <input id="package-name" name="package" type="text" required maxlength="128" placeholder="com.example.app" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>业务类型</span>
+            <select id="app-type" name="type"></select>
+          </label>
+          <label class="field">
+            <span>上线日期</span>
+            <input id="launch-at" name="launch" type="date" required />
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary">生成 32 位编码</button>
+          </div>
+        </form>
+        <div class="code-out" id="encode-out" hidden>
+          <p class="code-out__label">编码结果</p>
+          <p class="code-out__value" id="encode-code"></p>
+          <div class="code-out__actions">
+            <button type="button" class="btn btn--ghost" id="encode-copy">复制</button>
+            <button type="button" class="btn btn--ghost" id="encode-to-decode">填入还原</button>
+          </div>
+        </div>
+        <p class="hint" id="encode-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="panel panel--spaced">
+        <h2 class="panel__title">还原</h2>
+        <form id="decode-form" class="form-grid">
+          <label class="field field--wide">
+            <span>32 位编码</span>
+            <input id="decode-input" name="code" type="text" maxlength="32" placeholder="粘贴 32 位字符串" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary">还原原始数据</button>
+            <button type="button" class="btn btn--ghost" id="decode-clear">删除结果</button>
+          </div>
+        </form>
+        <dl class="decode-card" id="decode-out" hidden>
+          <div><dt>包名</dt><dd id="out-package"></dd></div>
+          <div><dt>业务类型</dt><dd id="out-type"></dd></div>
+          <div><dt>上线日期</dt><dd id="out-launch"></dd></div>
+        </dl>
+        <p class="hint" id="decode-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <p class="spec">
+        格式：24 字节载荷经 XOR 后 Base64URL → 固定 32 字符。
+        含业务类型、上线日期（自 2000-01-01 的天数）、包名（常见前缀字典 + 最多约 19 字符正文，超长尝试 deflate）。
+        同一页面可完整还原，无需服务端。
+      </p>
+    </section>
+
+    <footer class="foot">
+      <p>www.klgzapp.com · GitHub Pages</p>
+    </footer>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
