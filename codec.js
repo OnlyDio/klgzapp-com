@@ -1,12 +1,11 @@
 /**
  * klgzapp App Code
- * 32-char lowercase Base32 ←→ { packageName, appType(业务类型), launchAt }
+ * 32-char lowercase Base32 ←→ { packageName, appType(业务类型) }
  *
  * Binary layout (20 bytes → Base32 lowercase → exactly 32 chars a-z2-7):
- *   [0]     version/flags   bit7=compressed, low7=version (3)
+ *   [0]     version/flags   bit7=compressed, low7=version (4)
  *   [1]     appType
- *   [2..3]  days since 2000-01-01 UTC (uint16 BE)
- *   [4..19] package slot (16 bytes)
+ *   [2..19] package slot (18 bytes)
  *           uncompressed: [prefixId:1][utf8...][NUL...]
  *           compressed:   [len:1][deflate-raw bytes...][pad...]
  *
@@ -77,14 +76,12 @@ export function formatAppTypeLabel(type) {
   return `${type.en}（${type.zh}）`;
 }
 
-/** v3：输出固定 32 位小写 Base32（a-z2-7） */
-const VERSION = 3;
-const PKG_SLOT = 16;
+/** v4：去掉上线时间；包名槽扩至 18 字节；输出仍为 32 位小写 Base32 */
+const VERSION = 4;
+const PKG_SLOT = 18;
 const PAYLOAD_LEN = 20;
 const CODE_LEN = 32;
-const DAY0 = Date.UTC(2000, 0, 1);
-const MS_PER_DAY = 86_400_000;
-const XOR_KEY = new TextEncoder().encode('klgzapp.com/v3/app-code');
+const XOR_KEY = new TextEncoder().encode('klgzapp.com/v4/app-code');
 /** RFC 4648 Base32，小写输出 */
 const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
 
@@ -160,34 +157,12 @@ async function inflateRaw(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-function writeUint16BE(view, offset, value) {
-  view[offset] = (value >>> 8) & 0xff;
-  view[offset + 1] = value & 0xff;
-}
-
-function readUint16BE(view, offset) {
-  return (view[offset] << 8) | view[offset + 1];
-}
-
 function typeById(id) {
   return APP_TYPES.find((t) => t.id === id) ?? null;
 }
 
 function typeByKey(key) {
   return APP_TYPES.find((t) => t.key === key) ?? null;
-}
-
-function toUtcDayNumber(date) {
-  const utcMidnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-  const days = Math.floor((utcMidnight - DAY0) / MS_PER_DAY);
-  if (days < 0 || days > 0xffff) {
-    throw new Error('上线日期超出可编码范围（2000-01-01 起约 179 年内）');
-  }
-  return days;
-}
-
-function fromUtcDayNumber(days) {
-  return new Date(DAY0 + days * MS_PER_DAY);
 }
 
 function packPackageUncompressed(packageName) {
@@ -219,7 +194,7 @@ function unpackPackageUncompressed(slot) {
 }
 
 /**
- * @param {{ packageName: string, appType: string|number, launchAt: Date|string|number }} input
+ * @param {{ packageName: string, appType: string|number }} input
  * @returns {Promise<string>} 32-char code
  */
 export async function encodeAppCode(input) {
@@ -237,18 +212,12 @@ export async function encodeAppCode(input) {
   }
   if (!typeById(typeId)) throw new Error('未知业务类型');
 
-  const launch = input.launchAt instanceof Date
-    ? input.launchAt
-    : new Date(input.launchAt);
-  if (Number.isNaN(launch.getTime())) throw new Error('上线时间无效');
-  const days = toUtcDayNumber(launch);
-
   let pkgSlot = packPackageUncompressed(packageName);
   let compressed = false;
 
   if (!pkgSlot) {
     const zipped = await deflateRaw(new TextEncoder().encode(packageName));
-    // slot: [len:1][data...] max data 19 bytes
+    // slot: [len:1][data...] max data PKG_SLOT-1 bytes
     if (!zipped || zipped.length > PKG_SLOT - 1) {
       throw new Error(
         `包名无法装入编码（槽 ${PKG_SLOT} 字节）。请缩短包名（当前 ${packageName.length} 字符 / UTF-8 ${new TextEncoder().encode(packageName).length} 字节）`,
@@ -263,8 +232,7 @@ export async function encodeAppCode(input) {
   const payload = new Uint8Array(PAYLOAD_LEN);
   payload[0] = (compressed ? 0x80 : 0x00) | VERSION;
   payload[1] = typeId & 0xff;
-  writeUint16BE(payload, 2, days);
-  payload.set(pkgSlot, 4);
+  payload.set(pkgSlot, 2);
 
   const code = toBase32Lower(xorBytes(payload));
   if (code.length !== CODE_LEN) {
@@ -297,9 +265,7 @@ export async function decodeAppCode(code) {
   const type = typeById(payload[1]);
   if (!type) throw new Error(`未知业务类型 id=${payload[1]}`);
 
-  const days = readUint16BE(payload, 2);
-  const launchAt = fromUtcDayNumber(days);
-  const pkgSlot = payload.subarray(4, 4 + PKG_SLOT);
+  const pkgSlot = payload.subarray(2, 2 + PKG_SLOT);
 
   let packageName;
   if (compressed) {
@@ -321,9 +287,6 @@ export async function decodeAppCode(code) {
     appTypeZh: type.zh,
     /** 展示：English（中文备注） */
     appTypeLabel: formatAppTypeLabel(type),
-    launchAt,
-    launchISO: launchAt.toISOString(),
-    launchDate: launchAt.toISOString().slice(0, 10),
     version,
     compressed,
   };

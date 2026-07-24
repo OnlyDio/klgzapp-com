@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="klgzapp · 将包名、业务类型、上线日期编码为 32 位可逆字符串。" />
+  <meta name="description" content="klgzapp · 将包名、业务类型编码为 32 位可逆小写字符串。" />
   <title>klgzapp · App Code</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,7 +22,7 @@
     <header class="brand">
       <p class="brand__mark">klgzapp</p>
       <h1 class="brand__title">App Code</h1>
-      <p class="brand__lede">包名 + 业务类型 + 上线日期 → 32 位可逆编码 · 本地计算</p>
+      <p class="brand__lede">包名 + 业务类型 → 32 位可逆编码 · 本地计算</p>
     </header>
 
     <section>
@@ -33,13 +33,9 @@
             <span>包名</span>
             <input id="package-name" name="package" type="text" required maxlength="128" placeholder="com.example.app" autocomplete="off" spellcheck="false" />
           </label>
-          <label class="field">
+          <label class="field field--wide">
             <span>业务类型</span>
             <select id="app-type" name="type"></select>
-          </label>
-          <label class="field">
-            <span>上线日期</span>
-            <input id="launch-at" name="launch" type="date" required />
           </label>
           <div class="controls controls--form">
             <button type="submit" class="btn btn--primary">生成 32 位编码</button>
@@ -71,15 +67,13 @@
         <dl class="decode-card" id="decode-out" hidden>
           <div><dt>包名</dt><dd id="out-package"></dd></div>
           <div><dt>业务类型</dt><dd id="out-type"></dd></div>
-          <div><dt>上线日期</dt><dd id="out-launch"></dd></div>
         </dl>
         <p class="hint" id="decode-status" role="status" aria-live="polite"></p>
       </div>
 
       <p class="spec">
         格式：20 字节载荷经 XOR 后 → 小写 Base32 → 固定 32 位（a–z / 2–7）。
-        业务类型对齐 Google Play 全部应用/游戏类别（编码为英文类别 ID，界面带中文备注）。
-        另含上线日期（自 2000-01-01 的天数）、包名（常见前缀字典；超长尝试 deflate）。本地可逆，无需服务端。
+        字段：业务类型（Google Play 类别 ID）+ 包名（前缀字典 / deflate）。本地可逆，无需服务端。
       </p>
     </section>
 

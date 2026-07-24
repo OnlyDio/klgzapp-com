@@ -16,18 +16,6 @@ for (const t of APP_TYPES) {
   groups.get(groupName).append(opt);
 }
 
-const launchInput = document.getElementById('launch-at');
-function toDateInputValue(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-/** date input → UTC calendar day */
-function parseDateInput(value) {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-launchInput.value = toDateInputValue(new Date());
-
 const encodeForm = document.getElementById('encode-form');
 const encodeOut = document.getElementById('encode-out');
 const encodeCode = document.getElementById('encode-code');
@@ -44,7 +32,6 @@ encodeForm.addEventListener('submit', async (event) => {
     const code = await encodeAppCode({
       packageName: document.getElementById('package-name').value,
       appType: typeSelect.value,
-      launchAt: parseDateInput(launchInput.value),
     });
     encodeCode.textContent = code;
     encodeOut.hidden = false;
@@ -80,7 +67,6 @@ decodeForm.addEventListener('submit', async (event) => {
     const data = await decodeAppCode(decodeInput.value);
     document.getElementById('out-package').textContent = data.packageName;
     document.getElementById('out-type').textContent = `${data.appType} · ${data.appTypeLabel}`;
-    document.getElementById('out-launch').textContent = data.launchDate;
     decodeOut.hidden = false;
     decodeStatus.textContent = '还原成功';
   } catch (err) {
