@@ -1,11 +1,19 @@
 import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './codec.js';
 
 const typeSelect = document.getElementById('app-type');
+const groups = new Map();
 for (const t of APP_TYPES) {
+  const groupName = t.group === 'Games' ? 'Games（游戏）' : 'Apps（应用）';
+  if (!groups.has(groupName)) {
+    const og = document.createElement('optgroup');
+    og.label = groupName;
+    groups.set(groupName, og);
+    typeSelect.append(og);
+  }
   const opt = document.createElement('option');
-  opt.value = t.key; // 应用取值：英文
+  opt.value = t.key; // 应用取值：Google Play 英文类别 ID
   opt.textContent = formatAppTypeLabel(t); // 展示：English（中文备注）
-  typeSelect.append(opt);
+  groups.get(groupName).append(opt);
 }
 
 const launchInput = document.getElementById('launch-at');

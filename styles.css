@@ -194,6 +194,12 @@ body {
 .field select {
   font-family: var(--font-body);
   cursor: pointer;
+  max-width: 100%;
+}
+
+.field select optgroup {
+  font-weight: 700;
+  color: var(--ink-dim);
 }
 
 .field input:focus,

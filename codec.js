@@ -14,19 +14,62 @@
  */
 
 /**
- * 业务类型：应用取值用英文 key；UI 展示英文 + 中文备注。
- * key = 编码/还原时的业务标识（英文）
+ * 业务类型 = Google Play 应用/游戏类别（Play Console）。
+ * key = Google 类别 ID（英文，应用时用）；en/zh 仅展示。
+ * 参考：https://support.google.com/googleplay/android-developer/answer/9859673
  */
 export const APP_TYPES = [
-  { id: 0, key: 'social', en: 'Social', zh: '社交' },
-  { id: 1, key: 'ai', en: 'AI', zh: 'AI 应用' },
-  { id: 2, key: 'create', en: 'Create', zh: 'AI 创作' },
-  { id: 3, key: 'tool', en: 'Tool', zh: '工具' },
-  { id: 4, key: 'content', en: 'Content', zh: '内容' },
-  { id: 5, key: 'media', en: 'Media', zh: '影音' },
-  { id: 6, key: 'game', en: 'Game', zh: '游戏' },
-  { id: 7, key: 'ecommerce', en: 'Ecommerce', zh: '电商' },
-  { id: 8, key: 'other', en: 'Other', zh: '其他' },
+  // Apps
+  { id: 0, key: 'ART_AND_DESIGN', en: 'Art & Design', zh: '艺术与设计', group: 'Apps' },
+  { id: 1, key: 'AUTO_AND_VEHICLES', en: 'Auto & Vehicles', zh: '汽车与交通工具', group: 'Apps' },
+  { id: 2, key: 'BEAUTY', en: 'Beauty', zh: '美容时尚', group: 'Apps' },
+  { id: 3, key: 'BOOKS_AND_REFERENCE', en: 'Books & Reference', zh: '图书与工具书', group: 'Apps' },
+  { id: 4, key: 'BUSINESS', en: 'Business', zh: '商务', group: 'Apps' },
+  { id: 5, key: 'COMICS', en: 'Comics', zh: '动漫', group: 'Apps' },
+  { id: 6, key: 'COMMUNICATION', en: 'Communication', zh: '通讯', group: 'Apps' },
+  { id: 7, key: 'DATING', en: 'Dating', zh: '交友', group: 'Apps' },
+  { id: 8, key: 'EDUCATION', en: 'Education', zh: '教育', group: 'Apps' },
+  { id: 9, key: 'ENTERTAINMENT', en: 'Entertainment', zh: '娱乐', group: 'Apps' },
+  { id: 10, key: 'EVENTS', en: 'Events', zh: '活动', group: 'Apps' },
+  { id: 11, key: 'FINANCE', en: 'Finance', zh: '财经', group: 'Apps' },
+  { id: 12, key: 'FOOD_AND_DRINK', en: 'Food & Drink', zh: '食品与饮料', group: 'Apps' },
+  { id: 13, key: 'HEALTH_AND_FITNESS', en: 'Health & Fitness', zh: '健康与健身', group: 'Apps' },
+  { id: 14, key: 'HOUSE_AND_HOME', en: 'House & Home', zh: '家居', group: 'Apps' },
+  { id: 15, key: 'LIBRARIES_AND_DEMO', en: 'Libraries & Demo', zh: '软件库与演示', group: 'Apps' },
+  { id: 16, key: 'LIFESTYLE', en: 'Lifestyle', zh: '生活时尚', group: 'Apps' },
+  { id: 17, key: 'MAPS_AND_NAVIGATION', en: 'Maps & Navigation', zh: '地图和导航', group: 'Apps' },
+  { id: 18, key: 'MEDICAL', en: 'Medical', zh: '医疗', group: 'Apps' },
+  { id: 19, key: 'MUSIC_AND_AUDIO', en: 'Music & Audio', zh: '音乐和音频', group: 'Apps' },
+  { id: 20, key: 'NEWS_AND_MAGAZINES', en: 'News & Magazines', zh: '新闻与杂志', group: 'Apps' },
+  { id: 21, key: 'PARENTING', en: 'Parenting', zh: '育儿', group: 'Apps' },
+  { id: 22, key: 'PERSONALIZATION', en: 'Personalization', zh: '个性化', group: 'Apps' },
+  { id: 23, key: 'PHOTOGRAPHY', en: 'Photography', zh: '摄影', group: 'Apps' },
+  { id: 24, key: 'PRODUCTIVITY', en: 'Productivity', zh: '工作效率', group: 'Apps' },
+  { id: 25, key: 'SHOPPING', en: 'Shopping', zh: '购物', group: 'Apps' },
+  { id: 26, key: 'SOCIAL', en: 'Social', zh: '社交', group: 'Apps' },
+  { id: 27, key: 'SPORTS', en: 'Sports', zh: '体育', group: 'Apps' },
+  { id: 28, key: 'TOOLS', en: 'Tools', zh: '工具', group: 'Apps' },
+  { id: 29, key: 'TRAVEL_AND_LOCAL', en: 'Travel & Local', zh: '旅游与本地出行', group: 'Apps' },
+  { id: 30, key: 'VIDEO_PLAYERS', en: 'Video Players & Editors', zh: '视频播放器与编辑器', group: 'Apps' },
+  { id: 31, key: 'WEATHER', en: 'Weather', zh: '天气', group: 'Apps' },
+  // Games
+  { id: 32, key: 'GAME_ACTION', en: 'Action', zh: '动作', group: 'Games' },
+  { id: 33, key: 'GAME_ADVENTURE', en: 'Adventure', zh: '冒险', group: 'Games' },
+  { id: 34, key: 'GAME_ARCADE', en: 'Arcade', zh: '街机', group: 'Games' },
+  { id: 35, key: 'GAME_BOARD', en: 'Board', zh: '桌面和棋类', group: 'Games' },
+  { id: 36, key: 'GAME_CARD', en: 'Card', zh: '卡牌', group: 'Games' },
+  { id: 37, key: 'GAME_CASINO', en: 'Casino', zh: '赌场', group: 'Games' },
+  { id: 38, key: 'GAME_CASUAL', en: 'Casual', zh: '休闲', group: 'Games' },
+  { id: 39, key: 'GAME_EDUCATIONAL', en: 'Educational', zh: '教育', group: 'Games' },
+  { id: 40, key: 'GAME_MUSIC', en: 'Music', zh: '音乐', group: 'Games' },
+  { id: 41, key: 'GAME_PUZZLE', en: 'Puzzle', zh: '益智', group: 'Games' },
+  { id: 42, key: 'GAME_RACING', en: 'Racing', zh: '竞速', group: 'Games' },
+  { id: 43, key: 'GAME_ROLE_PLAYING', en: 'Role Playing', zh: '角色扮演', group: 'Games' },
+  { id: 44, key: 'GAME_SIMULATION', en: 'Simulation', zh: '模拟', group: 'Games' },
+  { id: 45, key: 'GAME_SPORTS', en: 'Sports', zh: '体育', group: 'Games' },
+  { id: 46, key: 'GAME_STRATEGY', en: 'Strategy', zh: '策略', group: 'Games' },
+  { id: 47, key: 'GAME_TRIVIA', en: 'Trivia', zh: '知识问答', group: 'Games' },
+  { id: 48, key: 'GAME_WORD', en: 'Word', zh: '文字', group: 'Games' },
 ];
 
 /** 下拉/还原展示：English（中文备注） */
@@ -34,7 +77,8 @@ export function formatAppTypeLabel(type) {
   return `${type.en}（${type.zh}）`;
 }
 
-const VERSION = 1;
+/** v2：业务类型改为 Google Play 全部分类 */
+const VERSION = 2;
 const PKG_SLOT = 20;
 const PAYLOAD_LEN = 24;
 const CODE_LEN = 32;
