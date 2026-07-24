@@ -61,7 +61,7 @@
         <form id="decode-form" class="form-grid">
           <label class="field field--wide">
             <span>32 位编码</span>
-            <input id="decode-input" name="code" type="text" maxlength="32" placeholder="粘贴 32 位字符串" autocomplete="off" spellcheck="false" />
+            <input id="decode-input" name="code" type="text" maxlength="32" placeholder="粘贴 32 位小写编码" autocomplete="off" spellcheck="false" class="code-input" />
           </label>
           <div class="controls controls--form">
             <button type="submit" class="btn btn--primary">还原原始数据</button>
@@ -77,7 +77,7 @@
       </div>
 
       <p class="spec">
-        格式：24 字节载荷经 XOR 后 Base64URL → 固定 32 字符。
+        格式：20 字节载荷经 XOR 后 → 小写 Base32 → 固定 32 位（a–z / 2–7）。
         业务类型对齐 Google Play 全部应用/游戏类别（编码为英文类别 ID，界面带中文备注）。
         另含上线日期（自 2000-01-01 的天数）、包名（常见前缀字典；超长尝试 deflate）。本地可逆，无需服务端。
       </p>

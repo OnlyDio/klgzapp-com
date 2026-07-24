@@ -278,6 +278,11 @@ body {
   overflow-wrap: anywhere;
   font: 500 1.05rem/1.4 var(--font-mono);
   color: var(--accent);
+  text-transform: lowercase;
+}
+
+.code-input {
+  text-transform: lowercase;
 }
 
 .code-out__actions {

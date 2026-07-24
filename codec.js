@@ -1,12 +1,12 @@
 /**
- * klgzapp App Code v1
- * 32-char URL-safe Base64 ←→ { packageName, appType(业务类型), launchAt }
+ * klgzapp App Code
+ * 32-char lowercase Base32 ←→ { packageName, appType(业务类型), launchAt }
  *
- * Binary layout (24 bytes → Base64URL → exactly 32 chars):
- *   [0]     version/flags   bit7=compressed, low7=version (1)
+ * Binary layout (20 bytes → Base32 lowercase → exactly 32 chars a-z2-7):
+ *   [0]     version/flags   bit7=compressed, low7=version (3)
  *   [1]     appType
  *   [2..3]  days since 2000-01-01 UTC (uint16 BE)
- *   [4..23] package slot (20 bytes)
+ *   [4..19] package slot (16 bytes)
  *           uncompressed: [prefixId:1][utf8...][NUL...]
  *           compressed:   [len:1][deflate-raw bytes...][pad...]
  *
@@ -77,14 +77,16 @@ export function formatAppTypeLabel(type) {
   return `${type.en}（${type.zh}）`;
 }
 
-/** v2：业务类型改为 Google Play 全部分类 */
-const VERSION = 2;
-const PKG_SLOT = 20;
-const PAYLOAD_LEN = 24;
+/** v3：输出固定 32 位小写 Base32（a-z2-7） */
+const VERSION = 3;
+const PKG_SLOT = 16;
+const PAYLOAD_LEN = 20;
 const CODE_LEN = 32;
 const DAY0 = Date.UTC(2000, 0, 1);
 const MS_PER_DAY = 86_400_000;
-const XOR_KEY = new TextEncoder().encode('klgzapp.com/v1/app-code');
+const XOR_KEY = new TextEncoder().encode('klgzapp.com/v3/app-code');
+/** RFC 4648 Base32，小写输出 */
+const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
 
 const PREFIXES = [
   { id: 1, text: 'com.' },
@@ -106,19 +108,42 @@ function xorBytes(bytes) {
   return out;
 }
 
-function toBase64Url(bytes) {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+/** 20 bytes → 32 lowercase base32 chars (no padding) */
+function toBase32Lower(bytes) {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    value = (value << 8) | bytes[i];
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  }
+  return out;
 }
 
-function fromBase64Url(text) {
-  const b64 = text.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-  const bin = atob(b64 + pad);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out;
+/** 32 lowercase base32 chars → 20 bytes */
+function fromBase32Lower(text) {
+  const cleaned = text.toLowerCase().replace(/=+$/g, '');
+  let bits = 0;
+  let value = 0;
+  const out = [];
+  for (let i = 0; i < cleaned.length; i += 1) {
+    const idx = BASE32_ALPHABET.indexOf(cleaned[i]);
+    if (idx < 0) throw new Error('编码含非法字符');
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(out);
 }
 
 async function deflateRaw(bytes) {
@@ -241,7 +266,7 @@ export async function encodeAppCode(input) {
   writeUint16BE(payload, 2, days);
   payload.set(pkgSlot, 4);
 
-  const code = toBase64Url(xorBytes(payload));
+  const code = toBase32Lower(xorBytes(payload));
   if (code.length !== CODE_LEN) {
     throw new Error(`内部错误：编码长度 ${code.length}，期望 ${CODE_LEN}`);
   }
@@ -252,15 +277,16 @@ export async function encodeAppCode(input) {
  * @param {string} code
  */
 export async function decodeAppCode(code) {
-  const raw = String(code ?? '').trim();
-  if (!/^[A-Za-z0-9_-]{32}$/.test(raw)) {
-    throw new Error('编码须为 32 位字符（A–Z a–z 0–9 - _）');
+  const raw = String(code ?? '').trim().toLowerCase();
+  if (!/^[a-z2-7]{32}$/.test(raw)) {
+    throw new Error('编码须为 32 位小写字符（a–z 与 2–7）');
   }
 
-  const payload = xorBytes(fromBase64Url(raw));
-  if (payload.length !== PAYLOAD_LEN) {
+  const decoded = fromBase32Lower(raw);
+  if (decoded.length < PAYLOAD_LEN) {
     throw new Error('编码载荷长度不正确');
   }
+  const payload = xorBytes(decoded.subarray(0, PAYLOAD_LEN));
 
   const version = payload[0] & 0x7f;
   const compressed = (payload[0] & 0x80) !== 0;
