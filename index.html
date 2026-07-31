@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="klgzapp · 将包名、业务类型编码为 32 位可逆小写字符串。" />
-  <title>klgzapp · App Code</title>
+  <meta name="description" content="klgzapp · App Code 与 Base64 本地工具。" />
+  <title>klgzapp · Tools</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
@@ -21,11 +21,16 @@
   <main class="shell">
     <header class="brand">
       <p class="brand__mark">klgzapp</p>
-      <h1 class="brand__title">App Code</h1>
-      <p class="brand__lede">包名 + 业务类型 → 32 位可逆编码 · 本地计算</p>
+      <h1 class="brand__title" id="tool-title">App Code</h1>
+      <p class="brand__lede" id="tool-lede">包名 + 业务类型 → 32 位可逆编码 · 本地计算</p>
     </header>
 
-    <section>
+    <nav class="tabs" role="tablist" aria-label="工具切换">
+      <button type="button" class="tabs__btn is-active" role="tab" aria-selected="true" data-tool="app-code" id="tab-app-code">App Code</button>
+      <button type="button" class="tabs__btn" role="tab" aria-selected="false" data-tool="base64" id="tab-base64">Base64</button>
+    </nav>
+
+    <section id="tool-app-code" data-tool-panel="app-code">
       <div class="panel">
         <h2 class="panel__title">编码</h2>
         <form id="encode-form" class="form-grid">
@@ -74,6 +79,60 @@
       <p class="spec">
         格式：20 字节载荷经 XOR 后 → 小写 Base32 → 固定 32 位（a–z / 2–7）。
         字段：业务类型（Google Play 类别 ID）+ 包名（前缀字典 / deflate）。本地可逆，无需服务端。
+      </p>
+    </section>
+
+    <section id="tool-base64" data-tool-panel="base64" hidden>
+      <div class="panel">
+        <h2 class="panel__title">编码</h2>
+        <form id="b64-encode-form" class="form-grid">
+          <label class="field field--wide">
+            <span>原文</span>
+            <textarea id="b64-plain" name="plain" rows="5" placeholder="输入要编码的文本（支持 Unicode）" spellcheck="false"></textarea>
+          </label>
+          <label class="field field--check">
+            <input id="b64-url-safe" type="checkbox" />
+            <span>URL-safe（- / _）</span>
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary">编码为 Base64</button>
+          </div>
+        </form>
+        <div class="code-out" id="b64-encode-out" hidden>
+          <p class="code-out__label">Base64 结果</p>
+          <p class="code-out__value code-out__value--raw" id="b64-encode-code"></p>
+          <div class="code-out__actions">
+            <button type="button" class="btn btn--ghost" id="b64-encode-copy">复制</button>
+            <button type="button" class="btn btn--ghost" id="b64-encode-to-decode">填入解码</button>
+          </div>
+        </div>
+        <p class="hint" id="b64-encode-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="panel panel--spaced">
+        <h2 class="panel__title">解码</h2>
+        <form id="b64-decode-form" class="form-grid">
+          <label class="field field--wide">
+            <span>Base64</span>
+            <textarea id="b64-coded" name="coded" rows="5" placeholder="粘贴 Base64 字符串" spellcheck="false"></textarea>
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary">解码为文本</button>
+            <button type="button" class="btn btn--ghost" id="b64-decode-clear">删除结果</button>
+          </div>
+        </form>
+        <div class="code-out" id="b64-decode-out" hidden>
+          <p class="code-out__label">解码结果</p>
+          <p class="code-out__value code-out__value--raw" id="b64-decode-text"></p>
+          <div class="code-out__actions">
+            <button type="button" class="btn btn--ghost" id="b64-decode-copy">复制</button>
+          </div>
+        </div>
+        <p class="hint" id="b64-decode-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <p class="spec">
+        标准 Base64（RFC 4648）· UTF-8 文本编解码 · 可选 URL-safe（+→-，/→_）。全部在浏览器本地完成。
       </p>
     </section>
 

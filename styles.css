@@ -179,7 +179,8 @@ body {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-width: 96px;
   height: 44px;
@@ -189,6 +190,40 @@ body {
   color: var(--ink);
   font: 500 1rem var(--font-mono);
   background: rgba(0, 0, 0, 0.28);
+}
+
+.field textarea {
+  height: auto;
+  min-height: 120px;
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.field--check {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.field--check input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.field--check span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+  cursor: pointer;
 }
 
 .field select {
@@ -203,7 +238,8 @@ body {
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: 2px solid rgba(61, 255, 168, 0.55);
   outline-offset: 1px;
 }
@@ -279,6 +315,11 @@ body {
   font: 500 1.05rem/1.4 var(--font-mono);
   color: var(--accent);
   text-transform: lowercase;
+}
+
+.code-out__value--raw {
+  text-transform: none;
+  white-space: pre-wrap;
 }
 
 .code-input {
