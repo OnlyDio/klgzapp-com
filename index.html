@@ -21,15 +21,13 @@
   <header class="topnav" id="site-topnav">
     <div class="topnav__bar">
       <a class="topnav__brand" href="./" aria-label="klgzapp 首页">klgzapp</a>
-      <nav class="topnav__cats" aria-label="工具分类">
-        <button type="button" class="topnav__cat is-active" data-cat="codec" aria-pressed="true">编解码</button>
+      <nav class="topnav__nav" aria-label="工具导航">
+        <div class="topnav__group" data-cat="codec">
+          <span class="topnav__group-label">编解码</span>
+          <button type="button" class="topnav__link is-active" data-tool="app-code" aria-current="page">App Code</button>
+          <button type="button" class="topnav__link" data-tool="base64">Base64</button>
+        </div>
       </nav>
-    </div>
-    <div class="topnav__sub" id="topnav-sub" aria-label="分类工具">
-      <div class="topnav__tools" data-cat-tools="codec">
-        <button type="button" class="topnav__tool is-active" data-tool="app-code" aria-current="page">App Code</button>
-        <button type="button" class="topnav__tool" data-tool="base64">Base64</button>
-      </div>
     </div>
   </header>
 

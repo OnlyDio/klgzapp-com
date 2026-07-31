@@ -1,62 +1,32 @@
 import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './codec.js';
 
-const CATEGORIES = {
-  codec: {
-    label: '编解码',
-    tools: ['app-code', 'base64'],
-  },
-};
-
 const TOOLS = {
   'app-code': {
     title: 'App Code',
     lede: '包名 + 业务类型 → 32 位可逆编码 · 本地计算',
-    cat: 'codec',
+    catLabel: '编解码',
   },
   base64: {
     title: 'Base64',
     lede: '文本 ↔ Base64 · UTF-8 · 本地计算',
-    cat: 'codec',
+    catLabel: '编解码',
   },
 };
 
-function switchCategory(catId, { pickFirstTool = true } = {}) {
-  const cat = CATEGORIES[catId];
-  if (!cat) return;
-
-  document.querySelectorAll('.topnav__cat').forEach((btn) => {
-    const active = btn.getAttribute('data-cat') === catId;
-    btn.classList.toggle('is-active', active);
-    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-
-  document.querySelectorAll('.topnav__tools').forEach((row) => {
-    const show = row.getAttribute('data-cat-tools') === catId;
-    row.classList.toggle('is-visible', show);
-    row.hidden = !show;
-  });
-
-  const catLabel = document.getElementById('tool-cat-label');
-  if (catLabel) catLabel.textContent = cat.label;
-
-  if (pickFirstTool && cat.tools[0]) switchTool(cat.tools[0], { syncCat: false });
-}
-
-function switchTool(toolId, { syncCat = true } = {}) {
+function switchTool(toolId) {
   const meta = TOOLS[toolId];
   if (!meta) return;
 
-  if (syncCat) switchCategory(meta.cat, { pickFirstTool: false });
-
   document.getElementById('tool-title').textContent = meta.title;
   document.getElementById('tool-lede').textContent = meta.lede;
+  document.getElementById('tool-cat-label').textContent = meta.catLabel;
   document.title = `klgzapp · ${meta.title}`;
 
   document.querySelectorAll('[data-tool-panel]').forEach((panel) => {
     panel.hidden = panel.getAttribute('data-tool-panel') !== toolId;
   });
 
-  document.querySelectorAll('.topnav__tool').forEach((btn) => {
+  document.querySelectorAll('.topnav__link').forEach((btn) => {
     const active = btn.getAttribute('data-tool') === toolId;
     btn.classList.toggle('is-active', active);
     if (active) btn.setAttribute('aria-current', 'page');
@@ -69,19 +39,8 @@ function switchTool(toolId, { syncCat = true } = {}) {
   window.history.replaceState({}, '', url);
 }
 
-document.querySelectorAll('.topnav__cat').forEach((btn) => {
-  btn.addEventListener('click', () => switchCategory(btn.getAttribute('data-cat')));
-});
-
-document.querySelectorAll('.topnav__tool').forEach((btn) => {
+document.querySelectorAll('.topnav__link').forEach((btn) => {
   btn.addEventListener('click', () => switchTool(btn.getAttribute('data-tool')));
-});
-
-// Show default category tools row
-document.querySelectorAll('.topnav__tools').forEach((row) => {
-  const show = row.getAttribute('data-cat-tools') === 'codec';
-  row.classList.toggle('is-visible', show);
-  row.hidden = !show;
 });
 
 const initialTool = new URLSearchParams(window.location.search).get('tool');
