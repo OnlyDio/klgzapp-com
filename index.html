@@ -18,17 +18,27 @@
     <div class="atmosphere__glow atmosphere__glow--b"></div>
   </div>
 
+  <header class="topnav" id="site-topnav">
+    <div class="topnav__bar">
+      <a class="topnav__brand" href="./" aria-label="klgzapp 首页">klgzapp</a>
+      <nav class="topnav__cats" aria-label="工具分类">
+        <button type="button" class="topnav__cat is-active" data-cat="codec" aria-pressed="true">编解码</button>
+      </nav>
+    </div>
+    <div class="topnav__sub" id="topnav-sub" aria-label="分类工具">
+      <div class="topnav__tools" data-cat-tools="codec">
+        <button type="button" class="topnav__tool is-active" data-tool="app-code" aria-current="page">App Code</button>
+        <button type="button" class="topnav__tool" data-tool="base64">Base64</button>
+      </div>
+    </div>
+  </header>
+
   <main class="shell">
     <header class="brand">
-      <p class="brand__mark">klgzapp</p>
+      <p class="brand__eyebrow" id="tool-cat-label">编解码</p>
       <h1 class="brand__title" id="tool-title">App Code</h1>
       <p class="brand__lede" id="tool-lede">包名 + 业务类型 → 32 位可逆编码 · 本地计算</p>
     </header>
-
-    <nav class="tabs" role="tablist" aria-label="工具切换">
-      <button type="button" class="tabs__btn is-active" role="tab" aria-selected="true" data-tool="app-code" id="tab-app-code">App Code</button>
-      <button type="button" class="tabs__btn" role="tab" aria-selected="false" data-tool="base64" id="tab-base64">Base64</button>
-    </nav>
 
     <section id="tool-app-code" data-tool-panel="app-code">
       <div class="panel">

@@ -114,12 +114,134 @@ body {
   z-index: 1;
   width: min(720px, calc(100% - 32px));
   margin: 0 auto;
-  padding: clamp(40px, 10vh, 96px) 0 64px;
+  padding: 28px 0 64px;
+}
+
+/* ——— Top navigation ——— */
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 18, 16, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.topnav__bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  min-height: 52px;
+  padding: 8px 0;
+}
+
+.topnav__brand {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  text-decoration: none;
+}
+
+.topnav__brand:hover {
+  color: var(--accent-2);
+}
+
+.topnav__cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topnav__cats::-webkit-scrollbar {
+  display: none;
+}
+
+.topnav__cat {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-dim);
+  font: 600 0.9rem var(--font-body);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topnav__cat:hover {
+  color: var(--ink);
+  background: rgba(232, 242, 236, 0.06);
+}
+
+.topnav__cat.is-active {
+  color: #06140e;
+  background: linear-gradient(120deg, var(--accent), var(--accent-2));
+}
+
+.topnav__sub {
+  border-top: 1px solid rgba(232, 242, 236, 0.06);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.topnav__tools {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 8px 0 10px;
+}
+
+.topnav__tools.is-visible {
+  display: flex;
+}
+
+.topnav__tool {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--ink-dim);
+  font: 500 0.82rem var(--font-body);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topnav__tool:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.topnav__tool.is-active {
+  color: var(--accent);
+  border-color: rgba(61, 255, 168, 0.4);
+  background: rgba(61, 255, 168, 0.08);
 }
 
 .brand {
-  margin-bottom: 36px;
+  margin-bottom: 28px;
   animation: rise 0.7s ease-out both;
+}
+
+.brand__eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .brand__mark {
