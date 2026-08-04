@@ -185,6 +185,9 @@ body {
 }
 
 .topnav__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 34px;
   padding: 0 14px;
   border: 1px solid var(--line);
@@ -194,6 +197,7 @@ body {
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .topnav__link:hover {

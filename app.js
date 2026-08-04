@@ -23,6 +23,7 @@ function switchTool(toolId) {
   const meta = TOOLS[toolId];
   if (!meta) return;
 
+  document.documentElement.setAttribute('data-active-tool', toolId);
   document.getElementById('tool-title').textContent = meta.title;
   document.getElementById('tool-lede').textContent = meta.lede;
   document.getElementById('tool-cat-label').textContent = meta.catLabel;
@@ -40,13 +41,22 @@ function switchTool(toolId) {
   });
 
   const url = new URL(window.location.href);
-  if (toolId === 'app-code') url.searchParams.delete('tool');
-  else url.searchParams.set('tool', toolId);
+  if (toolId === 'app-code') {
+    url.searchParams.delete('tool');
+    url.pathname = url.pathname.replace(/\/index\.html$/i, '/') || '/';
+  } else {
+    url.searchParams.set('tool', toolId);
+  }
   window.history.replaceState({}, '', url);
 }
 
-document.querySelectorAll('.topnav__link').forEach((btn) => {
-  btn.addEventListener('click', () => switchTool(btn.getAttribute('data-tool')));
+document.querySelectorAll('.topnav__link').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    // 同源工具切换：阻止整页刷新；模块失败时仍可走真实 href
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    switchTool(link.getAttribute('data-tool'));
+  });
 });
 
 const initialTool = new URLSearchParams(window.location.search).get('tool');
@@ -259,6 +269,9 @@ const webpJsonOut = document.getElementById('webp-json-out');
 const webpJsonText = document.getElementById('webp-json-text');
 const webpJsonStatus = document.getElementById('webp-json-status');
 const webpConvertBtn = document.getElementById('webp-convert-btn');
+const webpJsonCopy = document.getElementById('webp-json-copy');
+const webpJsonDownload = document.getElementById('webp-json-download');
+const webpClear = document.getElementById('webp-clear');
 
 let webpPreviewUrl = '';
 let lastWebpJsonName = 'webp.json';
@@ -271,83 +284,98 @@ function revokeWebpPreview() {
   }
 }
 
-webpFile.addEventListener('change', () => {
-  revokeWebpPreview();
-  webpJsonOut.hidden = true;
-  webpJsonText.textContent = '';
-  lastWebpJsonText = '';
-  const file = webpFile.files?.[0];
-  if (!file) {
-    webpPreview.hidden = true;
-    webpMeta.hidden = true;
-    webpJsonStatus.textContent = '';
-    return;
-  }
-  webpPreviewUrl = URL.createObjectURL(file);
-  webpPreviewImg.src = webpPreviewUrl;
-  webpPreview.hidden = false;
-  webpMeta.hidden = true;
-  webpJsonStatus.textContent = `已选择 ${file.name}（${file.size.toLocaleString()} 字节）`;
-});
+if (webpFile) {
+  webpFile.addEventListener('change', () => {
+    revokeWebpPreview();
+    if (webpJsonOut) webpJsonOut.hidden = true;
+    if (webpJsonText) webpJsonText.textContent = '';
+    lastWebpJsonText = '';
+    const file = webpFile.files?.[0];
+    if (!file) {
+      if (webpPreview) webpPreview.hidden = true;
+      if (webpMeta) webpMeta.hidden = true;
+      if (webpJsonStatus) webpJsonStatus.textContent = '';
+      return;
+    }
+    webpPreviewUrl = URL.createObjectURL(file);
+    if (webpPreviewImg) webpPreviewImg.src = webpPreviewUrl;
+    if (webpPreview) webpPreview.hidden = false;
+    if (webpMeta) webpMeta.hidden = true;
+    if (webpJsonStatus) {
+      webpJsonStatus.textContent = `已选择 ${file.name}（${file.size.toLocaleString()} 字节）`;
+    }
+  });
+}
 
-webpForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  webpJsonStatus.textContent = '';
-  const file = webpFile.files?.[0];
-  if (!file) {
-    webpJsonStatus.textContent = '请先选择 WebP 文件';
-    return;
-  }
+if (webpForm) {
+  webpForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (webpJsonStatus) webpJsonStatus.textContent = '';
+    const file = webpFile?.files?.[0];
+    if (!file) {
+      if (webpJsonStatus) webpJsonStatus.textContent = '请先选择 WebP 文件';
+      return;
+    }
 
-  const maxFrames = Number(webpMaxFrames.value) || 120;
-  webpConvertBtn.disabled = true;
-  webpJsonStatus.textContent = '转换中…';
+    const maxFrames = Number(webpMaxFrames?.value) || 120;
+    if (webpConvertBtn) webpConvertBtn.disabled = true;
+    if (webpJsonStatus) webpJsonStatus.textContent = '转换中…';
 
-  try {
-    const { doc, text } = await webpFileToJson(file, {
-      maxFrames,
-      pretty: webpPretty.checked,
-    });
-    lastWebpJsonText = text;
-    lastWebpJsonName = `${(file.name || 'image').replace(/\.webp$/i, '') || 'webp'}.json`;
-    webpJsonText.textContent = text;
-    webpJsonOut.hidden = false;
+    try {
+      const { doc, text } = await webpFileToJson(file, {
+        maxFrames,
+        pretty: webpPretty?.checked !== false,
+      });
+      lastWebpJsonText = text;
+      lastWebpJsonName = `${(file.name || 'image').replace(/\.webp$/i, '') || 'webp'}.json`;
+      if (webpJsonText) webpJsonText.textContent = text;
+      if (webpJsonOut) webpJsonOut.hidden = false;
 
-    const img = doc.image || {};
-    document.getElementById('webp-meta-size').textContent =
-      img.width && img.height ? `${img.width} × ${img.height}` : '—';
-    document.getElementById('webp-meta-anim').textContent = img.animated ? '是' : '否';
-    document.getElementById('webp-meta-frames').textContent =
-      doc.frames?.length != null
-        ? `${doc.frames.length}${img.frameCount && img.frameCount !== doc.frames.length ? ` / ${img.frameCount}` : ''}`
-        : String(img.frameCount ?? '—');
-    document.getElementById('webp-meta-loop').textContent =
-      img.loopCount == null ? '—' : img.loopCount === 0 ? '无限' : String(img.loopCount);
-    webpMeta.hidden = false;
+      const img = doc.image || {};
+      const sizeEl = document.getElementById('webp-meta-size');
+      const animEl = document.getElementById('webp-meta-anim');
+      const framesEl = document.getElementById('webp-meta-frames');
+      const loopEl = document.getElementById('webp-meta-loop');
+      if (sizeEl) sizeEl.textContent = img.width && img.height ? `${img.width} × ${img.height}` : '—';
+      if (animEl) animEl.textContent = img.animated ? '是' : '否';
+      if (framesEl) {
+        framesEl.textContent =
+          doc.frames?.length != null
+            ? `${doc.frames.length}${img.frameCount && img.frameCount !== doc.frames.length ? ` / ${img.frameCount}` : ''}`
+            : String(img.frameCount ?? '—');
+      }
+      if (loopEl) {
+        loopEl.textContent =
+          img.loopCount == null ? '—' : img.loopCount === 0 ? '无限' : String(img.loopCount);
+      }
+      if (webpMeta) webpMeta.hidden = false;
 
-    const frameBytes = (doc.frames || []).reduce((n, f) => n + (f.data?.length || 0), 0);
-    webpJsonStatus.textContent = doc.note
-      ? `完成 · ${doc.note}`
-      : `完成 · ${doc.frames?.length || 0} 帧 · JSON 约 ${(text.length / 1024).toFixed(1)} KB（base64 约 ${(frameBytes / 1024).toFixed(1)} KB）`;
-  } catch (err) {
-    webpJsonOut.hidden = true;
-    webpJsonStatus.textContent = err instanceof Error ? err.message : String(err);
-  } finally {
-    webpConvertBtn.disabled = false;
-  }
-});
+      const frameBytes = (doc.frames || []).reduce((n, f) => n + (f.data?.length || 0), 0);
+      if (webpJsonStatus) {
+        webpJsonStatus.textContent = doc.note
+          ? `完成 · ${doc.note}`
+          : `完成 · ${doc.frames?.length || 0} 帧 · JSON 约 ${(text.length / 1024).toFixed(1)} KB（base64 约 ${(frameBytes / 1024).toFixed(1)} KB）`;
+      }
+    } catch (err) {
+      if (webpJsonOut) webpJsonOut.hidden = true;
+      if (webpJsonStatus) webpJsonStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (webpConvertBtn) webpConvertBtn.disabled = false;
+    }
+  });
+}
 
-document.getElementById('webp-json-copy').addEventListener('click', async () => {
+webpJsonCopy?.addEventListener('click', async () => {
   if (!lastWebpJsonText) return;
   try {
     await navigator.clipboard.writeText(lastWebpJsonText);
-    webpJsonStatus.textContent = '已复制 JSON';
+    if (webpJsonStatus) webpJsonStatus.textContent = '已复制 JSON';
   } catch {
-    webpJsonStatus.textContent = '复制失败，请手动选择';
+    if (webpJsonStatus) webpJsonStatus.textContent = '复制失败，请手动选择';
   }
 });
 
-document.getElementById('webp-json-download').addEventListener('click', () => {
+webpJsonDownload?.addEventListener('click', () => {
   if (!lastWebpJsonText) return;
   const blob = new Blob([lastWebpJsonText], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -356,19 +384,19 @@ document.getElementById('webp-json-download').addEventListener('click', () => {
   a.download = lastWebpJsonName;
   a.click();
   URL.revokeObjectURL(url);
-  webpJsonStatus.textContent = `已下载 ${lastWebpJsonName}`;
+  if (webpJsonStatus) webpJsonStatus.textContent = `已下载 ${lastWebpJsonName}`;
 });
 
-document.getElementById('webp-clear').addEventListener('click', () => {
-  webpForm.reset();
-  webpPretty.checked = true;
-  webpMaxFrames.value = '120';
+webpClear?.addEventListener('click', () => {
+  webpForm?.reset();
+  if (webpPretty) webpPretty.checked = true;
+  if (webpMaxFrames) webpMaxFrames.value = '120';
   revokeWebpPreview();
-  webpPreviewImg.removeAttribute('src');
-  webpPreview.hidden = true;
-  webpMeta.hidden = true;
-  webpJsonOut.hidden = true;
-  webpJsonText.textContent = '';
+  webpPreviewImg?.removeAttribute('src');
+  if (webpPreview) webpPreview.hidden = true;
+  if (webpMeta) webpMeta.hidden = true;
+  if (webpJsonOut) webpJsonOut.hidden = true;
+  if (webpJsonText) webpJsonText.textContent = '';
   lastWebpJsonText = '';
-  webpJsonStatus.textContent = '已清除';
+  if (webpJsonStatus) webpJsonStatus.textContent = '已清除';
 });
