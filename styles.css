@@ -422,6 +422,55 @@ body {
   white-space: pre-wrap;
 }
 
+.code-out__value--scroll {
+  max-height: min(420px, 55vh);
+  overflow: auto;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.field input[type="file"] {
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.field input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.webp-preview {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.webp-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  margin: 8px 0 0;
+  border-radius: 10px;
+  object-fit: contain;
+  background: rgba(232, 242, 236, 0.04);
+}
+
+.webp-preview .decode-card {
+  margin-top: 12px;
+}
+
+.spec code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--accent-2);
+}
+
 .code-input {
   text-transform: lowercase;
 }

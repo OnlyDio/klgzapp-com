@@ -1,4 +1,5 @@
 import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './codec.js';
+import { webpFileToJson } from './webp-json.js';
 
 const TOOLS = {
   'app-code': {
@@ -10,6 +11,11 @@ const TOOLS = {
     title: 'Base64',
     lede: '文本 ↔ Base64 · UTF-8 · 本地计算',
     catLabel: '编解码',
+  },
+  'webp-json': {
+    title: 'WebP → JSON',
+    lede: '动图/静图 WebP → 帧与元数据 JSON · 本地计算',
+    catLabel: '媒体',
   },
 };
 
@@ -238,4 +244,131 @@ document.getElementById('b64-decode-clear').addEventListener('click', () => {
   b64Coded.value = '';
   b64DecodeOut.hidden = true;
   b64DecodeStatus.textContent = '已删除解码结果';
+});
+
+/* ——— WebP → JSON ——— */
+
+const webpForm = document.getElementById('webp-json-form');
+const webpFile = document.getElementById('webp-file');
+const webpMaxFrames = document.getElementById('webp-max-frames');
+const webpPretty = document.getElementById('webp-pretty');
+const webpPreview = document.getElementById('webp-preview');
+const webpPreviewImg = document.getElementById('webp-preview-img');
+const webpMeta = document.getElementById('webp-meta');
+const webpJsonOut = document.getElementById('webp-json-out');
+const webpJsonText = document.getElementById('webp-json-text');
+const webpJsonStatus = document.getElementById('webp-json-status');
+const webpConvertBtn = document.getElementById('webp-convert-btn');
+
+let webpPreviewUrl = '';
+let lastWebpJsonName = 'webp.json';
+let lastWebpJsonText = '';
+
+function revokeWebpPreview() {
+  if (webpPreviewUrl) {
+    URL.revokeObjectURL(webpPreviewUrl);
+    webpPreviewUrl = '';
+  }
+}
+
+webpFile.addEventListener('change', () => {
+  revokeWebpPreview();
+  webpJsonOut.hidden = true;
+  webpJsonText.textContent = '';
+  lastWebpJsonText = '';
+  const file = webpFile.files?.[0];
+  if (!file) {
+    webpPreview.hidden = true;
+    webpMeta.hidden = true;
+    webpJsonStatus.textContent = '';
+    return;
+  }
+  webpPreviewUrl = URL.createObjectURL(file);
+  webpPreviewImg.src = webpPreviewUrl;
+  webpPreview.hidden = false;
+  webpMeta.hidden = true;
+  webpJsonStatus.textContent = `已选择 ${file.name}（${file.size.toLocaleString()} 字节）`;
+});
+
+webpForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  webpJsonStatus.textContent = '';
+  const file = webpFile.files?.[0];
+  if (!file) {
+    webpJsonStatus.textContent = '请先选择 WebP 文件';
+    return;
+  }
+
+  const maxFrames = Number(webpMaxFrames.value) || 120;
+  webpConvertBtn.disabled = true;
+  webpJsonStatus.textContent = '转换中…';
+
+  try {
+    const { doc, text } = await webpFileToJson(file, {
+      maxFrames,
+      pretty: webpPretty.checked,
+    });
+    lastWebpJsonText = text;
+    lastWebpJsonName = `${(file.name || 'image').replace(/\.webp$/i, '') || 'webp'}.json`;
+    webpJsonText.textContent = text;
+    webpJsonOut.hidden = false;
+
+    const img = doc.image || {};
+    document.getElementById('webp-meta-size').textContent =
+      img.width && img.height ? `${img.width} × ${img.height}` : '—';
+    document.getElementById('webp-meta-anim').textContent = img.animated ? '是' : '否';
+    document.getElementById('webp-meta-frames').textContent =
+      doc.frames?.length != null
+        ? `${doc.frames.length}${img.frameCount && img.frameCount !== doc.frames.length ? ` / ${img.frameCount}` : ''}`
+        : String(img.frameCount ?? '—');
+    document.getElementById('webp-meta-loop').textContent =
+      img.loopCount == null ? '—' : img.loopCount === 0 ? '无限' : String(img.loopCount);
+    webpMeta.hidden = false;
+
+    const frameBytes = (doc.frames || []).reduce((n, f) => n + (f.data?.length || 0), 0);
+    webpJsonStatus.textContent = doc.note
+      ? `完成 · ${doc.note}`
+      : `完成 · ${doc.frames?.length || 0} 帧 · JSON 约 ${(text.length / 1024).toFixed(1)} KB（base64 约 ${(frameBytes / 1024).toFixed(1)} KB）`;
+  } catch (err) {
+    webpJsonOut.hidden = true;
+    webpJsonStatus.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    webpConvertBtn.disabled = false;
+  }
+});
+
+document.getElementById('webp-json-copy').addEventListener('click', async () => {
+  if (!lastWebpJsonText) return;
+  try {
+    await navigator.clipboard.writeText(lastWebpJsonText);
+    webpJsonStatus.textContent = '已复制 JSON';
+  } catch {
+    webpJsonStatus.textContent = '复制失败，请手动选择';
+  }
+});
+
+document.getElementById('webp-json-download').addEventListener('click', () => {
+  if (!lastWebpJsonText) return;
+  const blob = new Blob([lastWebpJsonText], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = lastWebpJsonName;
+  a.click();
+  URL.revokeObjectURL(url);
+  webpJsonStatus.textContent = `已下载 ${lastWebpJsonName}`;
+});
+
+document.getElementById('webp-clear').addEventListener('click', () => {
+  webpForm.reset();
+  webpPretty.checked = true;
+  webpMaxFrames.value = '120';
+  revokeWebpPreview();
+  webpPreviewImg.removeAttribute('src');
+  webpPreview.hidden = true;
+  webpMeta.hidden = true;
+  webpJsonOut.hidden = true;
+  webpJsonText.textContent = '';
+  lastWebpJsonText = '';
+  webpJsonStatus.textContent = '已清除';
 });

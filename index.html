@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="klgzapp · App Code 与 Base64 本地工具。" />
+  <meta name="description" content="klgzapp · App Code、Base64、WebP→JSON 本地工具。" />
   <title>klgzapp · Tools</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,6 +26,10 @@
           <span class="topnav__group-label">编解码</span>
           <button type="button" class="topnav__link is-active" data-tool="app-code" aria-current="page">App Code</button>
           <button type="button" class="topnav__link" data-tool="base64">Base64</button>
+        </div>
+        <div class="topnav__group" data-cat="media">
+          <span class="topnav__group-label">媒体</span>
+          <button type="button" class="topnav__link" data-tool="webp-json">WebP → JSON</button>
         </div>
       </nav>
     </div>
@@ -141,6 +145,56 @@
 
       <p class="spec">
         标准 Base64（RFC 4648）· UTF-8 文本编解码 · 可选 URL-safe（+→-，/→_）。全部在浏览器本地完成。
+      </p>
+    </section>
+
+    <section id="tool-webp-json" data-tool-panel="webp-json" hidden>
+      <div class="panel">
+        <h2 class="panel__title">转换</h2>
+        <form id="webp-json-form" class="form-grid">
+          <label class="field field--wide">
+            <span>WebP 文件</span>
+            <input id="webp-file" name="file" type="file" accept="image/webp,.webp" />
+          </label>
+          <label class="field">
+            <span>最大帧数</span>
+            <input id="webp-max-frames" name="maxFrames" type="number" min="1" max="500" value="120" />
+          </label>
+          <label class="field field--check">
+            <input id="webp-pretty" type="checkbox" checked />
+            <span>格式化 JSON（缩进）</span>
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary" id="webp-convert-btn">转为 JSON</button>
+            <button type="button" class="btn btn--ghost" id="webp-clear">清除</button>
+          </div>
+        </form>
+
+        <div class="webp-preview" id="webp-preview" hidden>
+          <p class="code-out__label">预览</p>
+          <img id="webp-preview-img" alt="WebP 预览" />
+          <dl class="decode-card" id="webp-meta" hidden>
+            <div><dt>尺寸</dt><dd id="webp-meta-size">—</dd></div>
+            <div><dt>动画</dt><dd id="webp-meta-anim">—</dd></div>
+            <div><dt>帧数</dt><dd id="webp-meta-frames">—</dd></div>
+            <div><dt>循环</dt><dd id="webp-meta-loop">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="code-out" id="webp-json-out" hidden>
+          <p class="code-out__label">JSON 结果</p>
+          <pre class="code-out__value code-out__value--raw code-out__value--scroll" id="webp-json-text"></pre>
+          <div class="code-out__actions">
+            <button type="button" class="btn btn--ghost" id="webp-json-copy">复制</button>
+            <button type="button" class="btn btn--ghost" id="webp-json-download">下载 .json</button>
+          </div>
+        </div>
+        <p class="hint" id="webp-json-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <p class="spec">
+        本地解析 RIFF 元数据；Chromium 系用 <code>ImageDecoder</code> 拆帧为 PNG base64 写入 JSON。
+        无 ImageDecoder 时：静态图仍可导出单帧；动画则附整文件 <code>blob</code> base64。不上传服务器。
       </p>
     </section>
 
