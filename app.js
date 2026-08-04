@@ -13,8 +13,8 @@ const TOOLS = {
     catLabel: '编解码',
   },
   'webp-json': {
-    title: 'WebP → JSON',
-    lede: '动图/静图 WebP → 帧与元数据 JSON · 本地计算',
+    title: 'WebP → Lottie',
+    lede: '动图/静图 WebP → Lottie JSON · 本地计算',
     catLabel: '媒体',
   },
 };
@@ -59,7 +59,8 @@ document.querySelectorAll('.topnav__link').forEach((link) => {
   });
 });
 
-const initialTool = new URLSearchParams(window.location.search).get('tool');
+const initialToolRaw = new URLSearchParams(window.location.search).get('tool');
+const initialTool = initialToolRaw === 'webp-lottie' ? 'webp-json' : initialToolRaw;
 if (initialTool && TOOLS[initialTool]) switchTool(initialTool);
 else switchTool('app-code');
 
@@ -256,10 +257,11 @@ document.getElementById('b64-decode-clear').addEventListener('click', () => {
   b64DecodeStatus.textContent = '已删除解码结果';
 });
 
-/* ——— WebP → JSON ——— */
+/* ——— WebP → Lottie ——— */
 
 const webpForm = document.getElementById('webp-json-form');
 const webpFile = document.getElementById('webp-file');
+const webpFr = document.getElementById('webp-fr');
 const webpMaxFrames = document.getElementById('webp-max-frames');
 const webpPretty = document.getElementById('webp-pretty');
 const webpPreview = document.getElementById('webp-preview');
@@ -274,7 +276,7 @@ const webpJsonDownload = document.getElementById('webp-json-download');
 const webpClear = document.getElementById('webp-clear');
 
 let webpPreviewUrl = '';
-let lastWebpJsonName = 'webp.json';
+let lastWebpJsonName = 'lottie.json';
 let lastWebpJsonText = '';
 
 function revokeWebpPreview() {
@@ -318,12 +320,14 @@ if (webpForm) {
     }
 
     const maxFrames = Number(webpMaxFrames?.value) || 120;
+    const fr = Number(webpFr?.value) || 30;
     if (webpConvertBtn) webpConvertBtn.disabled = true;
     if (webpJsonStatus) webpJsonStatus.textContent = '转换中…';
 
     try {
-      const { doc, text } = await webpFileToJson(file, {
+      const { doc, text, meta } = await webpFileToJson(file, {
         maxFrames,
+        fr,
         pretty: webpPretty?.checked !== false,
       });
       lastWebpJsonText = text;
@@ -331,30 +335,27 @@ if (webpForm) {
       if (webpJsonText) webpJsonText.textContent = text;
       if (webpJsonOut) webpJsonOut.hidden = false;
 
-      const img = doc.image || {};
       const sizeEl = document.getElementById('webp-meta-size');
       const animEl = document.getElementById('webp-meta-anim');
       const framesEl = document.getElementById('webp-meta-frames');
       const loopEl = document.getElementById('webp-meta-loop');
-      if (sizeEl) sizeEl.textContent = img.width && img.height ? `${img.width} × ${img.height}` : '—';
-      if (animEl) animEl.textContent = img.animated ? '是' : '否';
+      if (sizeEl) sizeEl.textContent = `${meta.width} × ${meta.height}`;
+      if (animEl) animEl.textContent = meta.animated ? '是' : '否';
       if (framesEl) {
         framesEl.textContent =
-          doc.frames?.length != null
-            ? `${doc.frames.length}${img.frameCount && img.frameCount !== doc.frames.length ? ` / ${img.frameCount}` : ''}`
-            : String(img.frameCount ?? '—');
+          meta.webpFrameCount && meta.webpFrameCount !== meta.exportedFrames
+            ? `${meta.exportedFrames} / ${meta.webpFrameCount}`
+            : String(meta.exportedFrames);
       }
       if (loopEl) {
-        loopEl.textContent =
-          img.loopCount == null ? '—' : img.loopCount === 0 ? '无限' : String(img.loopCount);
+        loopEl.textContent = `${meta.durationSec.toFixed(2)}s · ${meta.fr} fps · ${meta.durationFrames}f`;
       }
       if (webpMeta) webpMeta.hidden = false;
 
-      const frameBytes = (doc.frames || []).reduce((n, f) => n + (f.data?.length || 0), 0);
       if (webpJsonStatus) {
-        webpJsonStatus.textContent = doc.note
-          ? `完成 · ${doc.note}`
-          : `完成 · ${doc.frames?.length || 0} 帧 · JSON 约 ${(text.length / 1024).toFixed(1)} KB（base64 约 ${(frameBytes / 1024).toFixed(1)} KB）`;
+        webpJsonStatus.textContent = meta.note
+          ? `完成 Lottie · ${meta.note}`
+          : `完成 Lottie · ${meta.exportedFrames} 帧 · ${meta.durationSec.toFixed(2)}s @ ${meta.fr}fps · ${(text.length / 1024).toFixed(1)} KB`;
       }
     } catch (err) {
       if (webpJsonOut) webpJsonOut.hidden = true;
@@ -369,7 +370,7 @@ webpJsonCopy?.addEventListener('click', async () => {
   if (!lastWebpJsonText) return;
   try {
     await navigator.clipboard.writeText(lastWebpJsonText);
-    if (webpJsonStatus) webpJsonStatus.textContent = '已复制 JSON';
+    if (webpJsonStatus) webpJsonStatus.textContent = '已复制 Lottie JSON';
   } catch {
     if (webpJsonStatus) webpJsonStatus.textContent = '复制失败，请手动选择';
   }
@@ -390,6 +391,7 @@ webpJsonDownload?.addEventListener('click', () => {
 webpClear?.addEventListener('click', () => {
   webpForm?.reset();
   if (webpPretty) webpPretty.checked = true;
+  if (webpFr) webpFr.value = '30';
   if (webpMaxFrames) webpMaxFrames.value = '120';
   revokeWebpPreview();
   webpPreviewImg?.removeAttribute('src');

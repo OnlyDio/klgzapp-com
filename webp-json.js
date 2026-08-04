@@ -1,8 +1,7 @@
 /**
- * WebP → JSON（浏览器本地）
- * - 解析 RIFF 元数据（尺寸 / 是否动画 / 帧数 / 循环）
- * - 有 ImageDecoder 时抽出各帧为 PNG base64
- * - 否则回退为整文件 base64
+ * WebP → Lottie JSON（浏览器本地）
+ * - 解析 RIFF 元数据（尺寸 / 是否动画 / 帧时长）
+ * - ImageDecoder 拆帧为 PNG，组装 Bodymovin / Lottie 兼容 JSON
  */
 
 function readFourCC(view, offset) {
@@ -33,6 +32,8 @@ export function parseWebpRiff(buffer) {
     height: null,
     loopCount: null,
     frameCount: 0,
+    /** @type {number[]} ANMF 时长（ms） */
+    frameDurationsMs: [],
     chunks: [],
   };
 
@@ -52,14 +53,14 @@ export function parseWebpRiff(buffer) {
       meta.height = readUint24LE(view, dataOffset + 7) + 1;
     } else if (fourCC === 'ANIM' && size >= 6) {
       meta.loopCount = view.getUint16(dataOffset + 4, true);
-    } else if (fourCC === 'ANMF') {
+    } else if (fourCC === 'ANMF' && size >= 16) {
       meta.frameCount += 1;
-      if (meta.width == null && size >= 12) {
+      if (meta.width == null) {
         meta.width = readUint24LE(view, dataOffset + 6) + 1;
         meta.height = readUint24LE(view, dataOffset + 9) + 1;
       }
-    } else if ((fourCC === 'VP8 ' || fourCC === 'VP8L') && meta.width == null) {
-      // 静态图尺寸留给 ImageDecoder / Image 回填
+      // ANMF: x,y,w,h 各 3 字节后为 duration(ms) uint24
+      meta.frameDurationsMs.push(Math.max(1, readUint24LE(view, dataOffset + 12)));
     }
 
     offset = next;
@@ -103,23 +104,15 @@ async function bitmapToPngFrame(bitmap, canvasSize) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('无法创建 Canvas');
   ctx.clearRect(0, 0, width, height);
-  const dx = canvasSize?.x ?? 0;
-  const dy = canvasSize?.y ?? 0;
-  ctx.drawImage(bitmap, dx, dy);
+  ctx.drawImage(bitmap, canvasSize?.x ?? 0, canvasSize?.y ?? 0);
   const data = await canvasToPngBase64(canvas);
   bitmap.close?.();
-  return {
-    width: bitmap.width,
-    height: bitmap.height,
-    mimeType: 'image/png',
-    encoding: 'base64',
-    data,
-  };
+  return { width, height, data };
 }
 
 /**
  * @param {ArrayBuffer} buffer
- * @param {{ maxFrames?: number }} [opts]
+ * @param {{ maxFrames?: number, frameDurationsMs?: number[] }} [opts]
  */
 async function decodeFramesWithImageDecoder(buffer, opts = {}) {
   const maxFrames = opts.maxFrames ?? 120;
@@ -131,37 +124,34 @@ async function decodeFramesWithImageDecoder(buffer, opts = {}) {
   const height = track?.displayHeight || null;
   const limit = Math.min(frameCount, maxFrames);
   const frames = [];
+  const riffDurs = opts.frameDurationsMs || [];
 
   for (let i = 0; i < limit; i += 1) {
     const result = await decoder.decode({ frameIndex: i });
     const image = result.image;
     const bitmap = await createImageBitmap(image);
     image.close?.();
-    const png = await bitmapToPngFrame(bitmap, { width: width || bitmap.width, height: height || bitmap.height });
-    const durationUs = typeof result.duration === 'number' ? result.duration : null;
-    frames.push({
-      index: i,
-      durationMs: durationUs == null ? null : Math.max(1, Math.round(durationUs / 1000)),
-      ...png,
+    const png = await bitmapToPngFrame(bitmap, {
+      width: width || bitmap.width,
+      height: height || bitmap.height,
     });
+    let durationMs = null;
+    if (typeof result.duration === 'number' && result.duration > 0) {
+      durationMs = Math.max(1, Math.round(result.duration / 1000));
+    } else if (riffDurs[i] > 0) {
+      durationMs = riffDurs[i];
+    }
+    frames.push({ index: i, durationMs, ...png });
   }
 
   decoder.close?.();
-  return {
-    width,
-    height,
-    frameCount,
-    truncated: frameCount > limit,
-    frames,
-  };
+  return { width, height, frameCount, truncated: frameCount > limit, frames };
 }
 
 /**
- * 静态 WebP：用 Image 解码单帧
- * @param {ArrayBuffer} buffer
  * @param {string} objectUrl
  */
-async function decodeStaticViaImage(buffer, objectUrl) {
+async function decodeStaticViaImage(objectUrl) {
   const img = await new Promise((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
@@ -180,8 +170,86 @@ async function decodeStaticViaImage(buffer, objectUrl) {
 }
 
 /**
+ * 将 PNG 帧序列组装为 Bodymovin / Lottie JSON
+ * @param {{
+ *   name: string,
+ *   width: number,
+ *   height: number,
+ *   frames: Array<{ data: string, durationMs?: number|null }>,
+ *   fr?: number,
+ * }} input
+ */
+export function framesToLottie(input) {
+  const fr = Math.max(1, Math.min(120, Number(input.fr) || 30));
+  const width = Math.max(1, Math.round(input.width));
+  const height = Math.max(1, Math.round(input.height));
+  const frames = input.frames || [];
+  if (!frames.length) throw new Error('没有可导出的帧');
+
+  const assets = [];
+  const layers = [];
+  let cursor = 0;
+  const defaultMs = Math.max(1, Math.round(1000 / fr));
+
+  for (let i = 0; i < frames.length; i += 1) {
+    const frame = frames[i];
+    const id = `img_${i}`;
+    assets.push({
+      id,
+      w: width,
+      h: height,
+      u: '',
+      p: `data:image/png;base64,${frame.data}`,
+      e: 1,
+    });
+
+    const durMs = frame.durationMs > 0 ? frame.durationMs : defaultMs;
+    const len = Math.max(1, Math.round((durMs / 1000) * fr));
+    const ip = cursor;
+    const op = cursor + len;
+    layers.push({
+      ddd: 0,
+      ind: i + 1,
+      ty: 2,
+      nm: `Frame ${i + 1}`,
+      cl: '',
+      refId: id,
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100, ix: 11 },
+        r: { a: 0, k: 0, ix: 10 },
+        p: { a: 0, k: [width / 2, height / 2, 0], ix: 2, l: 2 },
+        a: { a: 0, k: [width / 2, height / 2, 0], ix: 1, l: 2 },
+        s: { a: 0, k: [100, 100, 100], ix: 6, l: 2 },
+      },
+      ao: 0,
+      ip,
+      op,
+      st: ip,
+      bm: 0,
+    });
+    cursor = op;
+  }
+
+  return {
+    v: '5.7.4',
+    fr,
+    ip: 0,
+    op: cursor,
+    w: width,
+    h: height,
+    nm: String(input.name || 'webp').replace(/\.webp$/i, '') || 'webp',
+    ddd: 0,
+    assets,
+    // Lottie 约定：数组靠前的图层在上层；按时序反转便于阅读
+    layers: layers.reverse(),
+    markers: [],
+  };
+}
+
+/**
  * @param {File} file
- * @param {{ maxFrames?: number, pretty?: boolean }} [opts]
+ * @param {{ maxFrames?: number, pretty?: boolean, fr?: number }} [opts]
  */
 export async function webpFileToJson(file, opts = {}) {
   if (!file) throw new Error('请选择 WebP 文件');
@@ -193,57 +261,69 @@ export async function webpFileToJson(file, opts = {}) {
 
   const buffer = await file.arrayBuffer();
   const riff = parseWebpRiff(buffer);
-  const bytes = new Uint8Array(buffer);
   const objectUrl = URL.createObjectURL(new Blob([buffer], { type: 'image/webp' }));
 
-  /** @type {any} */
-  const doc = {
-    version: 1,
-    tool: 'klgzapp-webp-json',
-    source: {
-      name,
-      size: file.size,
-      mimeType: file.type || 'image/webp',
-    },
-    image: {
-      width: riff.width,
-      height: riff.height,
-      animated: riff.animated,
-      loopCount: riff.loopCount,
-      frameCount: riff.frameCount,
-    },
-    frames: /** @type {any[]} */ ([]),
-  };
+  /** @type {{ width: number|null, height: number|null, frames: any[], truncated?: boolean, note?: string }} */
+  let decoded = { width: riff.width, height: riff.height, frames: [] };
 
   try {
     if (supportsImageDecoder()) {
-      const decoded = await decodeFramesWithImageDecoder(buffer, { maxFrames: opts.maxFrames });
-      doc.image.width = decoded.width ?? doc.image.width;
-      doc.image.height = decoded.height ?? doc.image.height;
-      doc.image.frameCount = decoded.frameCount;
-      doc.frames = decoded.frames;
-      if (decoded.truncated) {
-        doc.note = `帧数超过上限 ${opts.maxFrames ?? 120}，已截断`;
-      }
-    } else if (!riff.animated) {
-      const decoded = await decodeStaticViaImage(buffer, objectUrl);
-      doc.image.width = decoded.width;
-      doc.image.height = decoded.height;
-      doc.image.frameCount = 1;
-      doc.frames = decoded.frames;
-      doc.note = '当前浏览器无 ImageDecoder，已按静态单帧导出 PNG';
-    } else {
-      doc.blob = {
-        mimeType: 'image/webp',
-        encoding: 'base64',
-        data: bytesToBase64(bytes),
+      const result = await decodeFramesWithImageDecoder(buffer, {
+        maxFrames: opts.maxFrames,
+        frameDurationsMs: riff.frameDurationsMs,
+      });
+      decoded = {
+        width: result.width ?? riff.width,
+        height: result.height ?? riff.height,
+        frames: result.frames,
+        truncated: result.truncated,
+        note: result.truncated ? `帧数超过上限 ${opts.maxFrames ?? 120}，已截断` : undefined,
       };
-      doc.note = '当前浏览器不支持 ImageDecoder，动画帧无法拆分；已附整文件 base64（blob）';
+    } else if (!riff.animated) {
+      const result = await decodeStaticViaImage(objectUrl);
+      decoded = {
+        width: result.width,
+        height: result.height,
+        frames: result.frames,
+        note: '当前浏览器无 ImageDecoder，已按静态单帧导出',
+      };
+    } else {
+      throw new Error('当前浏览器不支持 ImageDecoder，无法拆分动画 WebP 为 Lottie。请使用 Chrome / Edge。');
     }
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
 
-  const text = JSON.stringify(doc, null, opts.pretty === false ? 0 : 2);
-  return { doc, text };
+  if (!decoded.frames.length) throw new Error('未能解码出任何帧');
+  const width = decoded.width || decoded.frames[0].width;
+  const height = decoded.height || decoded.frames[0].height;
+  if (!width || !height) throw new Error('无法确定画布尺寸');
+
+  const lottie = framesToLottie({
+    name,
+    width,
+    height,
+    frames: decoded.frames,
+    fr: opts.fr,
+  });
+
+  const text = JSON.stringify(lottie, null, opts.pretty === false ? 0 : 2);
+  return {
+    doc: lottie,
+    text,
+    meta: {
+      sourceName: name,
+      sourceSize: file.size,
+      animated: riff.animated,
+      loopCount: riff.loopCount,
+      webpFrameCount: riff.frameCount,
+      exportedFrames: decoded.frames.length,
+      width,
+      height,
+      fr: lottie.fr,
+      durationFrames: lottie.op,
+      durationSec: lottie.op / lottie.fr,
+      note: decoded.note,
+    },
+  };
 }

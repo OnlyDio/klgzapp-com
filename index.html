@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="klgzapp · App Code、Base64、WebP→JSON 本地工具。" />
+  <meta name="description" content="klgzapp · App Code、Base64、WebP→Lottie 本地工具。" />
   <title>klgzapp · Tools</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=3" />
+  <link rel="stylesheet" href="./styles.css?v=4" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <script>
     /* 不依赖 module：按 ?tool= 立刻切面板，避免旧缓存 JS / 模块加载失败时点了没反应 */
     (function () {
-      var allowed = { 'app-code': 1, base64: 1, 'webp-json': 1 };
+      var allowed = { 'app-code': 1, base64: 1, 'webp-json': 1, 'webp-lottie': 1 };
       var tool = new URLSearchParams(location.search).get('tool') || 'app-code';
+      if (tool === 'webp-lottie') tool = 'webp-json';
       if (!allowed[tool]) tool = 'app-code';
       document.documentElement.setAttribute('data-active-tool', tool);
       function apply() {
@@ -30,7 +31,7 @@
         var meta = {
           'app-code': { title: 'App Code', lede: '包名 + 业务类型 → 32 位可逆编码 · 本地计算', cat: '编解码' },
           base64: { title: 'Base64', lede: '文本 ↔ Base64 · UTF-8 · 本地计算', cat: '编解码' },
-          'webp-json': { title: 'WebP → JSON', lede: '动图/静图 WebP → 帧与元数据 JSON · 本地计算', cat: '媒体' },
+          'webp-json': { title: 'WebP → Lottie', lede: '动图/静图 WebP → Lottie JSON · 本地计算', cat: '媒体' },
         }[tool];
         if (!meta) return;
         var t = document.getElementById('tool-title');
@@ -64,7 +65,7 @@
         </div>
         <div class="topnav__group" data-cat="media">
           <span class="topnav__group-label">媒体</span>
-          <a class="topnav__link" href="./?tool=webp-json" data-tool="webp-json">WebP → JSON</a>
+          <a class="topnav__link" href="./?tool=webp-json" data-tool="webp-json">WebP → Lottie</a>
         </div>
       </nav>
     </div>
@@ -192,6 +193,10 @@
             <input id="webp-file" name="file" type="file" accept="image/webp,.webp" />
           </label>
           <label class="field">
+            <span>帧率 fr</span>
+            <input id="webp-fr" name="fr" type="number" min="1" max="120" value="30" />
+          </label>
+          <label class="field">
             <span>最大帧数</span>
             <input id="webp-max-frames" name="maxFrames" type="number" min="1" max="500" value="120" />
           </label>
@@ -200,7 +205,7 @@
             <span>格式化 JSON（缩进）</span>
           </label>
           <div class="controls controls--form">
-            <button type="submit" class="btn btn--primary" id="webp-convert-btn">转为 JSON</button>
+            <button type="submit" class="btn btn--primary" id="webp-convert-btn">转为 Lottie JSON</button>
             <button type="button" class="btn btn--ghost" id="webp-clear">清除</button>
           </div>
         </form>
@@ -211,13 +216,13 @@
           <dl class="decode-card" id="webp-meta" hidden>
             <div><dt>尺寸</dt><dd id="webp-meta-size">—</dd></div>
             <div><dt>动画</dt><dd id="webp-meta-anim">—</dd></div>
-            <div><dt>帧数</dt><dd id="webp-meta-frames">—</dd></div>
-            <div><dt>循环</dt><dd id="webp-meta-loop">—</dd></div>
+            <div><dt>导出帧</dt><dd id="webp-meta-frames">—</dd></div>
+            <div><dt>时长</dt><dd id="webp-meta-loop">—</dd></div>
           </dl>
         </div>
 
         <div class="code-out" id="webp-json-out" hidden>
-          <p class="code-out__label">JSON 结果</p>
+          <p class="code-out__label">Lottie JSON</p>
           <pre class="code-out__value code-out__value--raw code-out__value--scroll" id="webp-json-text"></pre>
           <div class="code-out__actions">
             <button type="button" class="btn btn--ghost" id="webp-json-copy">复制</button>
@@ -228,8 +233,8 @@
       </div>
 
       <p class="spec">
-        本地解析 RIFF 元数据；Chromium 系用 <code>ImageDecoder</code> 拆帧为 PNG base64 写入 JSON。
-        无 ImageDecoder 时：静态图仍可导出单帧；动画则附整文件 <code>blob</code> base64。不上传服务器。
+        输出 Bodymovin / Lottie 兼容 JSON：每帧嵌入 PNG（<code>assets[].e=1</code>），按原 WebP 帧时长映射到时间轴。
+        需 Chromium <code>ImageDecoder</code>（Chrome / Edge）。可导入 LottieFiles、lottie-web、AE 插件等。本地计算，不上传。
       </p>
     </section>
 
@@ -238,6 +243,6 @@
     </footer>
   </main>
 
-  <script type="module" src="./app.js?v=3"></script>
+  <script type="module" src="./app.js?v=4"></script>
 </body>
 </html>

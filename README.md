@@ -8,9 +8,9 @@
 |---|---|---|
 | **App Code** | 包名 + 业务类型 → 固定 32 位小写 Base32，可逆还原 | 默认首页 |
 | **Base64** | UTF-8 文本 ↔ Base64（可选 URL-safe） | `?tool=base64` |
-| **WebP → JSON** | 动图/静图 WebP → 元数据 + PNG 帧 base64 JSON | `?tool=webp-json` |
+| **WebP → Lottie** | 动图/静图 WebP → Bodymovin / Lottie JSON（嵌入 PNG 帧） | `?tool=webp-json` |
 
-顶部导航：左侧品牌；**编解码**（App Code / Base64）与 **媒体**（WebP → JSON）。
+顶部导航：左侧品牌；**编解码**（App Code / Base64）与 **媒体**（WebP → Lottie）。
 
 ---
 
@@ -37,13 +37,14 @@
 | URL-safe | 可选：`+`→`-`，`/`→`_`，去掉末尾 `=` |
 | 运行位置 | 浏览器本地，无服务端 |
 
-## WebP → JSON
+## WebP → Lottie
 
 | 项 | 说明 |
 |---|---|
 | 输入 | `.webp`（静图 / 动画） |
-| 输出 | JSON：`image` 元数据 + `frames[]`（PNG base64） |
-| 拆帧 | Chromium：`ImageDecoder`；无该 API 时静态可单帧，动画回退整文件 `blob` |
+| 输出 | Bodymovin / Lottie JSON：`assets` 嵌入 PNG（`e:1`）+ 按帧时长排布的 image layers |
+| 帧率 | 可调 `fr`（默认 30），按原 WebP 每帧 ms 映射到时间轴 |
+| 拆帧 | 需 Chromium `ImageDecoder`（Chrome / Edge） |
 | 上限 | 默认最多导出 120 帧（可改） |
 | 运行位置 | 浏览器本地，无服务端 |
 
@@ -56,7 +57,7 @@ python3 -m http.server 8080
 
 打开 `http://127.0.0.1:8080`（须用 HTTP，模块脚本无法用 `file://`）。  
 Base64：`http://127.0.0.1:8080/?tool=base64`  
-WebP → JSON：`http://127.0.0.1:8080/?tool=webp-json`
+WebP → Lottie：`http://127.0.0.1:8080/?tool=webp-json`
 
 ## GitHub Pages
 
