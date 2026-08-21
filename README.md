@@ -9,8 +9,9 @@
 | **App Code** | 包名 + 业务类型 → 固定 32 位小写 Base32，可逆还原 | 默认首页 |
 | **Base64** | UTF-8 文本 ↔ Base64（可选 URL-safe） | `?tool=base64` |
 | **WebP → Lottie** | 动图/静图 WebP → Bodymovin / Lottie JSON（嵌入 PNG 帧） | `?tool=webp-json` |
+| **批量下载** | 粘贴 URL 列表，下载到本地文件夹或生成 Python 脚本 | `?tool=batch-dl` |
 
-顶部导航：左侧品牌；**编解码**（App Code / Base64）与 **媒体**（WebP → Lottie）。
+顶部导航：左侧品牌；**编解码**（App Code / Base64）与 **媒体**（WebP → Lottie / 批量下载）。
 
 ---
 
@@ -48,6 +49,17 @@
 | 上限 | 默认最多导出 120 帧（可改） |
 | 运行位置 | 浏览器本地，无服务端 |
 
+## 批量下载
+
+| 项 | 说明 |
+|---|---|
+| 输入 | 每行一条 URL；支持粘连地址与 `/amspire/...` 相对路径 |
+| 范围 | 可指定从第 N 条到第 M 条 |
+| 浏览器下载 | Chrome / Edge 选择本地文件夹（需目标站开放 CORS） |
+| Python 脚本 | 页面可生成带当前列表的脚本；也可下载通用 [`download-batch.py`](./download-batch.py) |
+| 用法 | `python3 download-batch.py urls.txt data_5S` |
+| 运行位置 | 浏览器本地解析；实际拉取可在浏览器或本机 Python |
+
 ## 本地预览
 
 ```bash
@@ -57,7 +69,8 @@ python3 -m http.server 8080
 
 打开 `http://127.0.0.1:8080`（须用 HTTP，模块脚本无法用 `file://`）。  
 Base64：`http://127.0.0.1:8080/?tool=base64`  
-WebP → Lottie：`http://127.0.0.1:8080/?tool=webp-json`
+WebP → Lottie：`http://127.0.0.1:8080/?tool=webp-json`  
+批量下载：`http://127.0.0.1:8080/?tool=batch-dl`
 
 ## GitHub Pages
 

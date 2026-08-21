@@ -1,5 +1,6 @@
 import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './codec.js';
 import { webpFileToJson } from './webp-json.js';
+import { parseUrlList, sliceRange, buildPythonScript, downloadToDirectory } from './batch-dl.js';
 
 const TOOLS = {
   'app-code': {
@@ -15,6 +16,11 @@ const TOOLS = {
   'webp-json': {
     title: 'WebP → Lottie',
     lede: '动图/静图 WebP → Lottie JSON · 本地计算',
+    catLabel: '媒体',
+  },
+  'batch-dl': {
+    title: '批量下载',
+    lede: '粘贴 URL 列表 → 下载到本地文件夹或生成脚本',
     catLabel: '媒体',
   },
 };
@@ -401,4 +407,159 @@ webpClear?.addEventListener('click', () => {
   if (webpJsonText) webpJsonText.textContent = '';
   lastWebpJsonText = '';
   if (webpJsonStatus) webpJsonStatus.textContent = '已清除';
+});
+
+/* ——— 批量下载 ——— */
+
+const batchForm = document.getElementById('batch-dl-form');
+const batchUrls = document.getElementById('batch-dl-urls');
+const batchFrom = document.getElementById('batch-dl-from');
+const batchTo = document.getElementById('batch-dl-to');
+const batchWorkers = document.getElementById('batch-dl-workers');
+const batchOutdir = document.getElementById('batch-dl-outdir');
+const batchNumbered = document.getElementById('batch-dl-numbered');
+const batchRun = document.getElementById('batch-dl-run');
+const batchScript = document.getElementById('batch-dl-script');
+const batchExport = document.getElementById('batch-dl-export');
+const batchClear = document.getElementById('batch-dl-clear');
+const batchMeta = document.getElementById('batch-dl-meta');
+const batchMetaTotal = document.getElementById('batch-dl-meta-total');
+const batchMetaRange = document.getElementById('batch-dl-meta-range');
+const batchMetaProgress = document.getElementById('batch-dl-meta-progress');
+const batchLog = document.getElementById('batch-dl-log');
+const batchStatus = document.getElementById('batch-dl-status');
+
+function currentBatchJobs() {
+  const urls = parseUrlList(batchUrls?.value || '');
+  if (!urls.length) throw new Error('请先粘贴 URL 列表');
+  const sliced = sliceRange(urls, batchFrom?.value, batchTo?.value || urls.length);
+  if (!sliced.items.length) throw new Error('范围内没有条目');
+  return { urls, ...sliced };
+}
+
+function showBatchMeta(total, from, to, progress) {
+  if (batchMetaTotal) batchMetaTotal.textContent = `${total} 条`;
+  if (batchMetaRange) batchMetaRange.textContent = `${from}–${to}（${to - from + 1} 条）`;
+  if (batchMetaProgress) batchMetaProgress.textContent = progress || '待开始';
+  if (batchMeta) batchMeta.hidden = false;
+}
+
+function downloadTextFile(name, text, type = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function appendBatchLog(item) {
+  if (!batchLog) return;
+  batchLog.hidden = false;
+  const li = document.createElement('li');
+  li.className = `dl-log__item dl-log__item--${item.status}`;
+  const label = item.status === 'ok' ? '完成' : item.status === 'exists' ? '已存在' : '失败';
+  li.textContent = `${String(item.index).padStart(3, '0')} ${label} ${item.name}${item.error ? ` · ${item.error}` : ''}`;
+  batchLog.append(li);
+}
+
+batchForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (batchStatus) batchStatus.textContent = '';
+  if (batchLog) {
+    batchLog.replaceChildren();
+    batchLog.hidden = true;
+  }
+
+  let jobs;
+  try {
+    jobs = currentBatchJobs();
+  } catch (err) {
+    if (batchStatus) batchStatus.textContent = err instanceof Error ? err.message : String(err);
+    return;
+  }
+
+  showBatchMeta(jobs.urls.length, jobs.from, jobs.to, `0 / ${jobs.items.length}`);
+  if (!window.showDirectoryPicker) {
+    if (batchStatus) {
+      batchStatus.textContent = '当前浏览器不支持选择文件夹，请改用「下载 Python 脚本」';
+    }
+    return;
+  }
+
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      if (batchStatus) batchStatus.textContent = '已取消选择文件夹';
+      return;
+    }
+    if (batchStatus) batchStatus.textContent = err instanceof Error ? err.message : String(err);
+    return;
+  }
+
+  const stats = { ok: 0, exists: 0, err: 0 };
+  if (batchRun) batchRun.disabled = true;
+  if (batchStatus) batchStatus.textContent = '下载中…';
+  try {
+    const result = await downloadToDirectory(jobs.items, dirHandle, {
+      workers: Number(batchWorkers?.value) || 4,
+      numbered: Boolean(batchNumbered?.checked),
+      onItem(item) {
+        stats[item.status] = (stats[item.status] || 0) + 1;
+        const done = stats.ok + stats.exists + stats.err;
+        showBatchMeta(jobs.urls.length, jobs.from, jobs.to, `${done} / ${jobs.items.length} · 成功 ${stats.ok} · 已存在 ${stats.exists} · 失败 ${stats.err}`);
+        appendBatchLog(item);
+      },
+    });
+    if (batchStatus) {
+      batchStatus.textContent = result.err
+        ? `完成，但有 ${result.err} 条失败。跨域资源可改用「下载 Python 脚本」。`
+        : `完成 · 成功 ${result.ok} · 已存在 ${result.exists}`;
+    }
+  } catch (err) {
+    if (batchStatus) batchStatus.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    if (batchRun) batchRun.disabled = false;
+  }
+});
+
+batchScript?.addEventListener('click', () => {
+  try {
+    const jobs = currentBatchJobs();
+    showBatchMeta(jobs.urls.length, jobs.from, jobs.to, `将导出 ${jobs.items.length} 条`);
+    const script = buildPythonScript(jobs.items, batchOutdir?.value || 'downloads');
+    downloadTextFile('download-batch.py', script, 'text/x-python;charset=utf-8');
+    if (batchStatus) batchStatus.textContent = `已下载脚本，共 ${jobs.items.length} 条。运行：python3 download-batch.py`;
+  } catch (err) {
+    if (batchStatus) batchStatus.textContent = err instanceof Error ? err.message : String(err);
+  }
+});
+
+batchExport?.addEventListener('click', () => {
+  try {
+    const jobs = currentBatchJobs();
+    showBatchMeta(jobs.urls.length, jobs.from, jobs.to, `将导出 ${jobs.items.length} 条`);
+    downloadTextFile('urls.txt', `${jobs.items.join('\n')}\n`);
+    if (batchStatus) {
+      batchStatus.textContent = `已导出 urls.txt（${jobs.items.length} 条）。也可配合 ./download-batch.py 使用。`;
+    }
+  } catch (err) {
+    if (batchStatus) batchStatus.textContent = err instanceof Error ? err.message : String(err);
+  }
+});
+
+batchClear?.addEventListener('click', () => {
+  batchForm?.reset();
+  if (batchFrom) batchFrom.value = '1';
+  if (batchWorkers) batchWorkers.value = '4';
+  if (batchOutdir) batchOutdir.value = 'data_5S';
+  if (batchMeta) batchMeta.hidden = true;
+  if (batchLog) {
+    batchLog.replaceChildren();
+    batchLog.hidden = true;
+  }
+  if (batchStatus) batchStatus.textContent = '已清除';
 });

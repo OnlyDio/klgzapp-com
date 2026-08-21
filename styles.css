@@ -469,6 +469,44 @@ body {
   margin-top: 12px;
 }
 
+.spec a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.spec a:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
+.dl-log {
+  max-height: min(360px, 45vh);
+  overflow: auto;
+  margin: 16px 0 0;
+  padding: 10px 12px 10px 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  font: 500 0.78rem/1.45 var(--font-mono);
+}
+
+.dl-log__item {
+  margin: 0 0 4px;
+  color: var(--ink-dim);
+}
+
+.dl-log__item--ok {
+  color: var(--accent);
+}
+
+.dl-log__item--exists {
+  color: var(--accent-2);
+}
+
+.dl-log__item--err {
+  color: var(--danger);
+}
+
 .spec code {
   font-family: var(--font-mono);
   font-size: 0.85em;
