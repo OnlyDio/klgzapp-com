@@ -10,8 +10,9 @@
 | **Base64** | UTF-8 文本 ↔ Base64（可选 URL-safe） | `?tool=base64` |
 | **WebP → Lottie** | 动图/静图 WebP → Bodymovin / Lottie JSON（嵌入 PNG 帧） | `?tool=webp-json` |
 | **批量下载** | 粘贴 URL 列表，下载到本地文件夹或生成 Python 脚本 | `?tool=batch-dl` |
+| **生图立项** | 生成项目名（首字母大写）+ 包名，并检查 Google Play 是否已被占用 | `?tool=pkg-gen` |
 
-顶部导航：左侧品牌；**编解码**（App Code / Base64）与 **媒体**（WebP → Lottie / 批量下载）。
+顶部导航：左侧品牌；**编解码**（App Code / Base64）、**上架**（生图立项）与 **媒体**（WebP → Lottie / 批量下载）。
 
 ---
 
@@ -60,6 +61,18 @@
 | 用法 | `python3 download-batch.py urls.txt data_5S` |
 | 运行位置 | 浏览器本地解析；实际拉取可在浏览器或本机 Python |
 
+## 生图立项
+
+| 项 | 说明 |
+|---|---|
+| 业务 | 固定生图：Play 类别 `ART_AND_DESIGN` |
+| 项目名 | 英文词，首字母大写、其余小写（如 `Pixora`） |
+| 包名 | 默认 `com.<slug>.android`，可选 `com.<slug>.app` / `ai.<slug>.app` |
+| 占用检查 | 读取 Google Play 公开详情页；404 / Not Found → 未见上架；有应用标题 → 已被其他开发者占用 |
+| 局限 | Play Console 预留但未上架的包名，公开页查不到 |
+| 衔接 | 未见上架的结果可一键填入 App Code |
+| 直达 | `?tool=pkg-gen` |
+
 ## 本地预览
 
 ```bash
@@ -70,7 +83,8 @@ python3 -m http.server 8080
 打开 `http://127.0.0.1:8080`（须用 HTTP，模块脚本无法用 `file://`）。  
 Base64：`http://127.0.0.1:8080/?tool=base64`  
 WebP → Lottie：`http://127.0.0.1:8080/?tool=webp-json`  
-批量下载：`http://127.0.0.1:8080/?tool=batch-dl`
+批量下载：`http://127.0.0.1:8080/?tool=batch-dl`  
+生图立项：`http://127.0.0.1:8080/?tool=pkg-gen`
 
 ## GitHub Pages
 

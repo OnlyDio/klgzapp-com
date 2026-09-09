@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="klgzapp · App Code、Base64、WebP→Lottie、批量下载 本地工具。" />
+  <meta name="description" content="klgzapp · App Code、生图立项、Base64、WebP→Lottie、批量下载 本地工具。" />
   <title>klgzapp · Tools</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=5" />
+  <link rel="stylesheet" href="./styles.css?v=6" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <script>
     /* 不依赖 module：按 ?tool= 立刻切面板，避免旧缓存 JS / 模块加载失败时点了没反应 */
     (function () {
-      var allowed = { 'app-code': 1, base64: 1, 'webp-json': 1, 'webp-lottie': 1, 'batch-dl': 1 };
+      var allowed = { 'app-code': 1, base64: 1, 'webp-json': 1, 'webp-lottie': 1, 'batch-dl': 1, 'pkg-gen': 1 };
       var tool = new URLSearchParams(location.search).get('tool') || 'app-code';
       if (tool === 'webp-lottie') tool = 'webp-json';
       if (!allowed[tool]) tool = 'app-code';
@@ -33,6 +33,7 @@
           base64: { title: 'Base64', lede: '文本 ↔ Base64 · UTF-8 · 本地计算', cat: '编解码' },
           'webp-json': { title: 'WebP → Lottie', lede: '动图/静图 WebP → Lottie JSON · 本地计算', cat: '媒体' },
           'batch-dl': { title: '批量下载', lede: '粘贴 URL 列表 → 下载到本地文件夹或生成脚本', cat: '媒体' },
+          'pkg-gen': { title: '生图立项', lede: '项目名 + 包名 → 检查 Google Play 是否已被占用', cat: '上架' },
         }[tool];
         if (!meta) return;
         var t = document.getElementById('tool-title');
@@ -63,6 +64,10 @@
           <span class="topnav__group-label">编解码</span>
           <a class="topnav__link is-active" href="./" data-tool="app-code" aria-current="page">App Code</a>
           <a class="topnav__link" href="./?tool=base64" data-tool="base64">Base64</a>
+        </div>
+        <div class="topnav__group" data-cat="store">
+          <span class="topnav__group-label">上架</span>
+          <a class="topnav__link" href="./?tool=pkg-gen" data-tool="pkg-gen">生图立项</a>
         </div>
         <div class="topnav__group" data-cat="media">
           <span class="topnav__group-label">媒体</span>
@@ -292,11 +297,65 @@
       </p>
     </section>
 
+    <section id="tool-pkg-gen" data-tool-panel="pkg-gen" hidden>
+      <div class="panel">
+        <h2 class="panel__title">生成并查占用</h2>
+        <form id="pkg-gen-form" class="form-grid">
+          <label class="field">
+            <span>关键词（可选）</span>
+            <input id="pkg-gen-seed" name="seed" type="text" maxlength="24" placeholder="如 Pix / Aura" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>需要几个未占用</span>
+            <input id="pkg-gen-count" name="count" type="number" min="1" max="8" value="3" />
+          </label>
+          <label class="field field--wide">
+            <span>包名格式</span>
+            <select id="pkg-gen-pattern" name="pattern">
+              <option value="com.android" selected>com.项目名.android（对齐 Lovita）</option>
+              <option value="com.app">com.项目名.app</option>
+              <option value="ai.app">ai.项目名.app</option>
+            </select>
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary" id="pkg-gen-run">生成并检查 Play</button>
+            <button type="button" class="btn btn--ghost" id="pkg-gen-clear">清除</button>
+          </div>
+        </form>
+        <p class="hint" id="pkg-gen-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="panel panel--spaced">
+        <h2 class="panel__title">手工核对</h2>
+        <form id="pkg-check-form" class="form-grid">
+          <label class="field">
+            <span>项目名</span>
+            <input id="pkg-check-name" name="name" type="text" maxlength="24" placeholder="Pixora" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>包名</span>
+            <input id="pkg-check-pkg" name="package" type="text" maxlength="128" placeholder="com.pixora.android" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="controls controls--form">
+            <button type="submit" class="btn btn--primary">检查该包名</button>
+          </div>
+        </form>
+        <p class="hint" id="pkg-check-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <ul class="pkg-list" id="pkg-gen-list" hidden></ul>
+      <p class="spec">
+        业务固定为生图：Play 类别 <code>ART_AND_DESIGN</code>（艺术与设计）。项目名强制首字母大写、其余小写。
+        占用检查读取 Google Play 公开详情页：未找到 → 可视为未被其他开发者上架；已有标题 → 已被占用。
+        Play Console 里预留但未上架的包名公开页查不到。查到未占用后可一键填入 App Code。
+      </p>
+    </section>
+
     <footer class="foot">
       <p>www.klgzapp.com · GitHub Pages</p>
     </footer>
   </main>
 
-  <script type="module" src="./app.js?v=5"></script>
+  <script type="module" src="./app.js?v=6"></script>
 </body>
 </html>

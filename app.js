@@ -1,6 +1,13 @@
 import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './codec.js';
 import { webpFileToJson } from './webp-json.js';
 import { parseUrlList, sliceRange, buildPythonScript, downloadToDirectory } from './batch-dl.js';
+import {
+  IMAGE_APP_TYPE,
+  titleCaseName,
+  packageFromName,
+  generateAvailableApps,
+  checkPlayOccupancy,
+} from './pkg-gen.js';
 
 const TOOLS = {
   'app-code': {
@@ -22,6 +29,11 @@ const TOOLS = {
     title: '批量下载',
     lede: '粘贴 URL 列表 → 下载到本地文件夹或生成脚本',
     catLabel: '媒体',
+  },
+  'pkg-gen': {
+    title: '生图立项',
+    lede: '项目名 + 包名 → 检查 Google Play 是否已被占用',
+    catLabel: '上架',
   },
 };
 
@@ -252,7 +264,7 @@ document.getElementById('b64-decode-copy').addEventListener('click', async () =>
   try {
     await navigator.clipboard.writeText(text);
     b64DecodeStatus.textContent = '已复制';
-  } catch {
+      } catch {
     b64DecodeStatus.textContent = '复制失败，请手动选择';
   }
 });
@@ -562,4 +574,199 @@ batchClear?.addEventListener('click', () => {
     batchLog.hidden = true;
   }
   if (batchStatus) batchStatus.textContent = '已清除';
+});
+
+/* ——— 生图立项 ——— */
+
+const pkgGenForm = document.getElementById('pkg-gen-form');
+const pkgGenRun = document.getElementById('pkg-gen-run');
+const pkgGenClear = document.getElementById('pkg-gen-clear');
+const pkgGenStatus = document.getElementById('pkg-gen-status');
+const pkgGenList = document.getElementById('pkg-gen-list');
+const pkgCheckForm = document.getElementById('pkg-check-form');
+const pkgCheckName = document.getElementById('pkg-check-name');
+const pkgCheckPkg = document.getElementById('pkg-check-pkg');
+const pkgCheckStatus = document.getElementById('pkg-check-status');
+const pkgUsedNames = new Set();
+
+function occupancyLabel(row) {
+  if (row.occupied === true) return { text: '已被占用', kind: 'taken' };
+  if (row.occupied === false) return { text: '未见上架', kind: 'free' };
+  return { text: '查询失败', kind: 'unknown' };
+}
+
+function fillAppCode(packageName) {
+  const pkgInput = document.getElementById('package-name');
+  if (pkgInput) pkgInput.value = packageName;
+  if (typeSelect) typeSelect.value = IMAGE_APP_TYPE;
+  switchTool('app-code');
+  encodeStatus.textContent = `已填入 ${packageName} · ${IMAGE_APP_TYPE}，可直接生成编码`;
+}
+
+function appendPkgCard(row, prepend = true) {
+  if (!pkgGenList) return;
+  pkgGenList.hidden = false;
+  const badge = occupancyLabel(row);
+  const item = document.createElement('li');
+  item.className = `pkg-card pkg-card--${badge.kind}`;
+
+  const head = document.createElement('div');
+  head.className = 'pkg-card__head';
+  const nameEl = document.createElement('p');
+  nameEl.className = 'pkg-card__name';
+  nameEl.textContent = row.name;
+  const pill = document.createElement('span');
+  pill.className = `pkg-pill pkg-pill--${badge.kind}`;
+  pill.textContent = badge.text;
+  head.append(nameEl, pill);
+
+  const pkgEl = document.createElement('p');
+  pkgEl.className = 'pkg-card__pkg';
+  pkgEl.textContent = row.packageName;
+
+  const metaEl = document.createElement('p');
+  metaEl.className = 'pkg-card__meta';
+  metaEl.textContent = row.occupied
+    ? [row.title, row.developer].filter(Boolean).join(' · ')
+    : row.error || 'Play 公开详情页未找到该包名';
+
+  const actions = document.createElement('div');
+  actions.className = 'code-out__actions';
+
+  const copyNameBtn = document.createElement('button');
+  copyNameBtn.type = 'button';
+  copyNameBtn.className = 'btn btn--ghost';
+  copyNameBtn.textContent = '复制项目名';
+  copyNameBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(row.name);
+      if (pkgGenStatus) pkgGenStatus.textContent = `已复制项目名 ${row.name}`;
+    } catch {
+      if (pkgGenStatus) pkgGenStatus.textContent = '复制失败，请手动选择';
+    }
+  });
+
+  const copyPkgBtn = document.createElement('button');
+  copyPkgBtn.type = 'button';
+  copyPkgBtn.className = 'btn btn--ghost';
+  copyPkgBtn.textContent = '复制包名';
+  copyPkgBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(row.packageName);
+      if (pkgGenStatus) pkgGenStatus.textContent = `已复制包名 ${row.packageName}`;
+    } catch {
+      if (pkgGenStatus) pkgGenStatus.textContent = '复制失败，请手动选择';
+    }
+  });
+
+  const playLink = document.createElement('a');
+  playLink.className = 'btn btn--ghost';
+  playLink.href = row.playUrl;
+  playLink.target = '_blank';
+  playLink.rel = 'noreferrer';
+  playLink.textContent = '打开 Play';
+
+  actions.append(copyNameBtn, copyPkgBtn, playLink);
+  if (row.occupied === false) {
+    const toCode = document.createElement('button');
+    toCode.type = 'button';
+    toCode.className = 'btn btn--ghost';
+    toCode.textContent = '填入 App Code';
+    toCode.addEventListener('click', () => fillAppCode(row.packageName));
+    actions.append(toCode);
+  }
+
+  item.append(head, pkgEl, metaEl, actions);
+  if (prepend) pkgGenList.prepend(item);
+  else pkgGenList.append(item);
+}
+
+function syncCheckPackage() {
+  const name = titleCaseName(pkgCheckName?.value || '');
+  if (!name || !pkgCheckPkg) return;
+  const pattern = document.getElementById('pkg-gen-pattern')?.value || 'com.android';
+  try {
+    pkgCheckPkg.value = packageFromName(name, pattern);
+  } catch {
+    /* 输入未完成时不提示 */
+  }
+}
+
+pkgCheckName?.addEventListener('input', syncCheckPackage);
+pkgCheckName?.addEventListener('blur', () => {
+  const name = titleCaseName(pkgCheckName.value);
+  if (name) pkgCheckName.value = name;
+  syncCheckPackage();
+});
+document.getElementById('pkg-gen-pattern')?.addEventListener('change', syncCheckPackage);
+
+pkgGenForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (pkgGenRun) pkgGenRun.disabled = true;
+  if (pkgGenStatus) pkgGenStatus.textContent = '正在生成并查询 Google Play…';
+  try {
+    const result = await generateAvailableApps({
+      count: Number(document.getElementById('pkg-gen-count')?.value) || 3,
+      seed: document.getElementById('pkg-gen-seed')?.value || '',
+      pattern: document.getElementById('pkg-gen-pattern')?.value || 'com.android',
+      usedNames: pkgUsedNames,
+      onProgress({ phase, name, packageName, found, want, row }) {
+        if (phase === 'checking' && pkgGenStatus) {
+          pkgGenStatus.textContent = `正在查 ${name} / ${packageName} · 已找到 ${found}/${want}`;
+        }
+        if (phase === 'checked' && row) appendPkgCard(row);
+      },
+    });
+    if (pkgGenStatus) {
+      pkgGenStatus.textContent = result.found.length
+        ? `完成：${result.found.length} 个未见上架（共查 ${result.log.length} 个候选）`
+        : `未找到未见上架的包名（已查 ${result.log.length} 个）。可换关键词或包名格式再试。`;
+    }
+  } catch (err) {
+    if (pkgGenStatus) pkgGenStatus.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    if (pkgGenRun) pkgGenRun.disabled = false;
+  }
+});
+
+pkgCheckForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (pkgCheckStatus) pkgCheckStatus.textContent = '正在查询…';
+  try {
+    const typedName = titleCaseName(pkgCheckName?.value || '');
+    let packageName = (pkgCheckPkg?.value || '').trim().toLowerCase();
+    const pattern = document.getElementById('pkg-gen-pattern')?.value || 'com.android';
+    if (!packageName && typedName) packageName = packageFromName(typedName, pattern);
+    if (typedName && pkgCheckName) pkgCheckName.value = typedName;
+    if (pkgCheckPkg) pkgCheckPkg.value = packageName;
+    const check = await checkPlayOccupancy(packageName);
+    const row = {
+      name: typedName || titleCaseName(packageName.split('.')[1] || '') || 'Custom',
+      packageName,
+      ...check,
+    };
+    appendPkgCard(row);
+    const badge = occupancyLabel(row);
+    if (pkgCheckStatus) {
+      pkgCheckStatus.textContent = check.error
+        ? `查询失败：${check.error}`
+        : `${row.name} / ${packageName} → ${badge.text}`;
+    }
+  } catch (err) {
+    if (pkgCheckStatus) pkgCheckStatus.textContent = err instanceof Error ? err.message : String(err);
+  }
+});
+
+pkgGenClear?.addEventListener('click', () => {
+  pkgGenForm?.reset();
+  pkgCheckForm?.reset();
+  pkgUsedNames.clear();
+  const count = document.getElementById('pkg-gen-count');
+  if (count) count.value = '3';
+  if (pkgGenList) {
+    pkgGenList.replaceChildren();
+    pkgGenList.hidden = true;
+  }
+  if (pkgGenStatus) pkgGenStatus.textContent = '已清除';
+  if (pkgCheckStatus) pkgCheckStatus.textContent = '';
 });
