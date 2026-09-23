@@ -1,6 +1,7 @@
 /**
  * 批量：视频 → 动画 WebP（浏览器本地）
  * 抽帧 → canvas 编码静态 WebP → 组装 VP8X + ANIM + ANMF
+ * 默认「保质压缩」：高质量缩放 + 去近似重复帧 + 体积超标时下调质量（不低于下限）
  */
 
 function readFourCC(view, offset) {
@@ -26,8 +27,50 @@ function writeUint24LE(view, offset, value) {
   view.setUint8(offset + 2, (v >>> 16) & 0xff);
 }
 
+/** @typedef {'balanced' | 'smaller' | 'quality'} CompressPreset */
+
+/** @type {Record<CompressPreset, object>} */
+export const COMPRESS_PRESETS = {
+  balanced: {
+    label: '保质压缩（推荐）',
+    fps: 8,
+    quality: 0.72,
+    qualityFloor: 0.58,
+    maxWidth: 640,
+    maxFrames: 72,
+    maxDurationSec: 12,
+    skipSimilar: true,
+    similarThreshold: 5,
+    // 目标：约每帧每像素字节预算（动画 WebP 有损）
+    bytesPerPixel: 0.14,
+  },
+  smaller: {
+    label: '更小体积',
+    fps: 6,
+    quality: 0.62,
+    qualityFloor: 0.48,
+    maxWidth: 480,
+    maxFrames: 48,
+    maxDurationSec: 10,
+    skipSimilar: true,
+    similarThreshold: 7,
+    bytesPerPixel: 0.1,
+  },
+  quality: {
+    label: '更高画质',
+    fps: 12,
+    quality: 0.85,
+    qualityFloor: 0.7,
+    maxWidth: 720,
+    maxFrames: 90,
+    maxDurationSec: 15,
+    skipSimilar: true,
+    similarThreshold: 3,
+    bytesPerPixel: 0.22,
+  },
+};
+
 /**
- * 从 canvas.toBlob('image/webp') 得到的 RIFF 中取出可放入 ANMF 的比特流（VP8/VP8L ± ALPH）
  * @param {ArrayBuffer} buffer
  */
 export function extractWebpBitstream(buffer) {
@@ -193,15 +236,77 @@ function outNameFromVideo(name) {
   return `${base}.webp`;
 }
 
+/** 偶数边长，利于 VP8 */
+function evenSize(n) {
+  const v = Math.max(2, Math.round(n));
+  return v % 2 === 0 ? v : v - 1;
+}
+
+/**
+ * 缩略指纹，用于跳过近似重复帧（省体积、几乎不损观感）
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} width
+ * @param {number} height
+ */
+function frameFingerprint(ctx, width, height) {
+  const sw = 16;
+  const sh = 16;
+  const tmp = document.createElement('canvas');
+  tmp.width = sw;
+  tmp.height = sh;
+  const tctx = tmp.getContext('2d', { willReadFrequently: true });
+  if (!tctx) return null;
+  tctx.imageSmoothingEnabled = true;
+  tctx.imageSmoothingQuality = 'low';
+  tctx.drawImage(ctx.canvas, 0, 0, width, height, 0, 0, sw, sh);
+  const { data } = tctx.getImageData(0, 0, sw, sh);
+  const fp = new Uint8Array(sw * sh);
+  for (let i = 0, j = 0; i < data.length; i += 4, j += 1) {
+    fp[j] = (data[i] * 3 + data[i + 1] * 4 + data[i + 2] * 1) >> 3;
+  }
+  return fp;
+}
+
+function fingerprintsSimilar(a, b, threshold) {
+  if (!a || !b || a.length !== b.length) return false;
+  let sum = 0;
+  for (let i = 0; i < a.length; i += 1) sum += Math.abs(a[i] - b[i]);
+  return sum / a.length <= threshold;
+}
+
+function resolvePreset(opts = {}) {
+  const key = opts.preset && COMPRESS_PRESETS[opts.preset] ? opts.preset : 'balanced';
+  const base = COMPRESS_PRESETS[key];
+  return {
+    preset: key,
+    fps: Math.max(1, Math.min(30, Number(opts.fps) || base.fps)),
+    quality: Math.max(0.1, Math.min(1, Number(opts.quality) ?? base.quality)),
+    qualityFloor: Math.max(0.1, Math.min(1, Number(opts.qualityFloor) ?? base.qualityFloor)),
+    maxWidth: Math.max(64, Math.min(1920, Number(opts.maxWidth) || base.maxWidth)),
+    maxFrames: Math.max(1, Math.min(300, Number(opts.maxFrames) || base.maxFrames)),
+    maxDurationSec: Math.max(0.5, Math.min(120, Number(opts.maxDurationSec) || base.maxDurationSec)),
+    loopCount: Number.isFinite(opts.loopCount) ? opts.loopCount : 0,
+    skipSimilar: opts.skipSimilar !== false && base.skipSimilar !== false,
+    similarThreshold: Number(opts.similarThreshold) || base.similarThreshold,
+    bytesPerPixel: Number(opts.bytesPerPixel) || base.bytesPerPixel,
+    onProgress: opts.onProgress,
+  };
+}
+
 /**
  * @param {File} file
  * @param {{
+ *   preset?: CompressPreset,
  *   fps?: number,
  *   quality?: number,
+ *   qualityFloor?: number,
  *   maxWidth?: number,
  *   maxFrames?: number,
  *   maxDurationSec?: number,
  *   loopCount?: number,
+ *   skipSimilar?: boolean,
+ *   similarThreshold?: number,
+ *   bytesPerPixel?: number,
  *   onProgress?: (info: { phase: string, current: number, total: number, message?: string }) => void,
  * }} [opts]
  */
@@ -213,13 +318,20 @@ export async function videoFileToAnimatedWebp(file, opts = {}) {
     throw new Error(`不支持的文件：${name}`);
   }
 
-  const fps = Math.max(1, Math.min(30, Number(opts.fps) || 10));
-  const quality = Math.max(0.1, Math.min(1, Number(opts.quality) ?? 0.8));
-  const maxWidth = Math.max(64, Math.min(1920, Number(opts.maxWidth) || 720));
-  const maxFrames = Math.max(1, Math.min(300, Number(opts.maxFrames) || 90));
-  const maxDurationSec = Math.max(0.5, Math.min(120, Number(opts.maxDurationSec) || 15));
-  const loopCount = Number.isFinite(opts.loopCount) ? opts.loopCount : 0;
-  const onProgress = opts.onProgress;
+  const cfg = resolvePreset(opts);
+  const {
+    fps,
+    maxWidth,
+    maxFrames,
+    maxDurationSec,
+    loopCount,
+    skipSimilar,
+    similarThreshold,
+    bytesPerPixel,
+    onProgress,
+  } = cfg;
+  let quality = cfg.quality;
+  const qualityFloor = Math.min(quality, cfg.qualityFloor);
 
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
@@ -253,41 +365,93 @@ export async function videoFileToAnimatedWebp(file, opts = {}) {
     if (!srcW || !srcH) throw new Error('无法读取视频尺寸');
 
     const scale = Math.min(1, maxWidth / srcW);
-    const width = Math.max(1, Math.round(srcW * scale));
-    const height = Math.max(1, Math.round(srcH * scale));
+    const width = evenSize(srcW * scale);
+    const height = evenSize(srcH * scale);
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
     if (!ctx) throw new Error('Canvas 不可用');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-    const durationMs = Math.max(1, Math.round(1000 / fps));
-    /** @type {Array<{ bitstream: Uint8Array, durationMs: number, width: number, height: number, hasAlpha: boolean }>} */
-    const frames = [];
+    const stepMs = Math.max(1, Math.round(1000 / fps));
+    const targetFrameBytes = Math.max(2_000, Math.round(width * height * bytesPerPixel));
 
-    for (let i = 0; i < times.length; i += 1) {
-      onProgress?.({
-        phase: 'frame',
-        current: i + 1,
-        total: times.length,
-        message: `${name} · 抽帧 ${i + 1}/${times.length}`,
-      });
-      await seekVideo(video, times[i]);
-      ctx.drawImage(video, 0, 0, width, height);
-      const buffer = await canvasToWebpBuffer(canvas, quality);
-      const { bitstream, hasAlpha } = extractWebpBitstream(buffer);
-      frames.push({ bitstream, durationMs, width, height, hasAlpha });
+    /**
+     * @param {number} q
+     * @param {(info: any) => void} [progress]
+     */
+    async function encodePass(q, progress) {
+      /** @type {Array<{ bitstream: Uint8Array, durationMs: number, width: number, height: number, hasAlpha: boolean }>} */
+      const frames = [];
+      /** @type {Uint8Array | null} */
+      let prevFp = null;
+      let skipped = 0;
+
+      for (let i = 0; i < times.length; i += 1) {
+        progress?.({
+          phase: 'frame',
+          current: i + 1,
+          total: times.length,
+          message: `${name} · 抽帧 ${i + 1}/${times.length} · q=${q.toFixed(2)}`,
+        });
+        await seekVideo(video, times[i]);
+        ctx.drawImage(video, 0, 0, width, height);
+
+        const fp = skipSimilar ? frameFingerprint(ctx, width, height) : null;
+        if (skipSimilar && frames.length && fingerprintsSimilar(prevFp, fp, similarThreshold)) {
+          frames[frames.length - 1].durationMs = Math.min(
+            0xffffff,
+            frames[frames.length - 1].durationMs + stepMs,
+          );
+          skipped += 1;
+          continue;
+        }
+
+        const buffer = await canvasToWebpBuffer(canvas, q);
+        const { bitstream, hasAlpha } = extractWebpBitstream(buffer);
+        frames.push({ bitstream, durationMs: stepMs, width, height, hasAlpha });
+        prevFp = fp;
+      }
+
+      if (!frames.length) throw new Error('没有可编码的帧');
+      const bytes = assembleAnimatedWebp(frames, { width, height, loopCount });
+      return { frames, bytes, skipped };
     }
 
-    onProgress?.({ phase: 'encode', current: 1, total: 1, message: `组装 ${name}` });
-    const bytes = assembleAnimatedWebp(frames, { width, height, loopCount });
-    const blob = new Blob([bytes], { type: 'image/webp' });
-    const truncated = duration < video.duration || frames.length >= maxFrames;
+    onProgress?.({ phase: 'encode', current: 0, total: 1, message: `${name} · 保质压缩编码` });
+    let pass = await encodePass(quality, onProgress);
+    let usedQuality = quality;
+    let recompressed = false;
+
+    const avgFrameBytes =
+      pass.frames.reduce((s, f) => s + f.bitstream.length, 0) / Math.max(1, pass.frames.length);
+
+    // 体积超标：在质量下限之上再压一档（只重编一次，避免过慢）
+    if (avgFrameBytes > targetFrameBytes * 1.25 && quality > qualityFloor + 0.02) {
+      const nextQ = Math.max(qualityFloor, Math.round((quality * 0.82) * 100) / 100);
+      if (nextQ < quality - 0.01) {
+        onProgress?.({
+          phase: 'recompress',
+          current: 1,
+          total: 1,
+          message: `${name} · 体积偏大，保质复压 q=${nextQ.toFixed(2)}`,
+        });
+        pass = await encodePass(nextQ, onProgress);
+        usedQuality = nextQ;
+        recompressed = true;
+      }
+    }
+
+    const blob = new Blob([pass.bytes], { type: 'image/webp' });
+    const truncated = duration < video.duration || times.length >= maxFrames;
+    const totalDurationMs = pass.frames.reduce((s, f) => s + f.durationMs, 0);
 
     return {
       blob,
-      bytes,
+      bytes: pass.bytes,
       fileName: outNameFromVideo(name),
       meta: {
         sourceName: name,
@@ -295,12 +459,19 @@ export async function videoFileToAnimatedWebp(file, opts = {}) {
         width,
         height,
         fps,
-        quality,
-        frameCount: frames.length,
-        durationSec: (frames.length * durationMs) / 1000,
+        quality: usedQuality,
+        qualityFloor,
+        preset: cfg.preset,
+        frameCount: pass.frames.length,
+        sampledFrames: times.length,
+        skippedSimilar: pass.skipped,
+        recompressed,
+        durationSec: totalDurationMs / 1000,
         sourceDurationSec: video.duration,
         truncated,
         loopCount,
+        bytes: pass.bytes.length,
+        compressionRatio: file.size > 0 ? pass.bytes.length / file.size : null,
       },
     };
   } finally {

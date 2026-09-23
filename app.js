@@ -2,6 +2,7 @@ import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './c
 import { webpFileToJson } from './webp-json.js';
 import { parseUrlList, sliceRange, buildPythonScript, downloadToDirectory } from './batch-dl.js';
 import {
+  COMPRESS_PRESETS,
   convertVideosBatch,
   writeBlobToDirectory,
   downloadBlob,
@@ -33,7 +34,7 @@ const TOOLS = {
   },
   'video-webp': {
     title: '视频 → WebP',
-    lede: '批量视频抽帧 → 动画 WebP · 本地计算',
+    lede: '批量视频 → 保质压缩动画 WebP · 本地计算',
     catLabel: '媒体',
   },
   'batch-dl': {
@@ -437,7 +438,9 @@ webpClear?.addEventListener('click', () => {
 
 const videoWebpForm = document.getElementById('video-webp-form');
 const videoWebpFiles = document.getElementById('video-webp-files');
+const videoWebpPreset = document.getElementById('video-webp-preset');
 const videoWebpFps = document.getElementById('video-webp-fps');
+const videoWebpSkipSimilar = document.getElementById('video-webp-skip-similar');
 const videoWebpQuality = document.getElementById('video-webp-quality');
 const videoWebpMaxWidth = document.getElementById('video-webp-max-width');
 const videoWebpMaxFrames = document.getElementById('video-webp-max-frames');
@@ -464,16 +467,41 @@ function revokeVideoWebpPreview() {
   }
 }
 
+function applyVideoWebpPreset(key) {
+  const preset = COMPRESS_PRESETS[key] || COMPRESS_PRESETS.balanced;
+  if (videoWebpFps) videoWebpFps.value = String(preset.fps);
+  if (videoWebpQuality) videoWebpQuality.value = String(preset.quality);
+  if (videoWebpMaxWidth) videoWebpMaxWidth.value = String(preset.maxWidth);
+  if (videoWebpMaxFrames) videoWebpMaxFrames.value = String(preset.maxFrames);
+  if (videoWebpMaxSec) videoWebpMaxSec.value = String(preset.maxDurationSec);
+  if (videoWebpSkipSimilar) videoWebpSkipSimilar.checked = preset.skipSimilar !== false;
+}
+
 function videoWebpOpts() {
+  const preset = videoWebpPreset?.value || 'balanced';
+  const base = COMPRESS_PRESETS[preset] || COMPRESS_PRESETS.balanced;
   return {
-    fps: Number(videoWebpFps?.value) || 10,
-    quality: Number(videoWebpQuality?.value) || 0.8,
-    maxWidth: Number(videoWebpMaxWidth?.value) || 720,
-    maxFrames: Number(videoWebpMaxFrames?.value) || 90,
-    maxDurationSec: Number(videoWebpMaxSec?.value) || 15,
+    preset,
+    fps: Number(videoWebpFps?.value) || base.fps,
+    quality: Number(videoWebpQuality?.value) || base.quality,
+    qualityFloor: base.qualityFloor,
+    maxWidth: Number(videoWebpMaxWidth?.value) || base.maxWidth,
+    maxFrames: Number(videoWebpMaxFrames?.value) || base.maxFrames,
+    maxDurationSec: Number(videoWebpMaxSec?.value) || base.maxDurationSec,
     loopCount: Number(videoWebpLoop?.value) || 0,
+    skipSimilar: videoWebpSkipSimilar ? Boolean(videoWebpSkipSimilar.checked) : true,
+    similarThreshold: base.similarThreshold,
+    bytesPerPixel: base.bytesPerPixel,
   };
 }
+
+videoWebpPreset?.addEventListener('change', () => {
+  applyVideoWebpPreset(videoWebpPreset.value || 'balanced');
+  if (videoWebpStatus) {
+    const p = COMPRESS_PRESETS[videoWebpPreset.value] || COMPRESS_PRESETS.balanced;
+    videoWebpStatus.textContent = `已应用档位：${p.label}`;
+  }
+});
 
 function selectedVideoFiles() {
   return Array.from(videoWebpFiles?.files || []);
@@ -566,9 +594,11 @@ async function runVideoWebpBatch({ toFolder }) {
           if (result) {
             stats.ok += 1;
             const meta = result.meta;
-            const detail = `${meta.width}×${meta.height} · ${meta.frameCount} 帧 · ${(result.blob.size / 1024).toFixed(1)} KB${
-              meta.truncated ? ' · 已截断' : ''
-            }`;
+            const detail = `${meta.width}×${meta.height} · ${meta.frameCount} 帧` +
+              (meta.skippedSimilar ? `（略过相似 ${meta.skippedSimilar}）` : '') +
+              ` · ${(result.blob.size / 1024).toFixed(1)} KB · q=${Number(meta.quality).toFixed(2)}` +
+              (meta.recompressed ? ' · 已复压' : '') +
+              (meta.truncated ? ' · 已截断' : '');
             appendVideoWebpLog({ index, name: result.fileName, status: 'ok', detail });
             showVideoWebpPreview(result.blob);
             if (dirHandle) {
@@ -628,11 +658,8 @@ videoWebpFolder?.addEventListener('click', async () => {
 
 videoWebpClear?.addEventListener('click', () => {
   videoWebpForm?.reset();
-  if (videoWebpFps) videoWebpFps.value = '10';
-  if (videoWebpQuality) videoWebpQuality.value = '0.8';
-  if (videoWebpMaxWidth) videoWebpMaxWidth.value = '720';
-  if (videoWebpMaxFrames) videoWebpMaxFrames.value = '90';
-  if (videoWebpMaxSec) videoWebpMaxSec.value = '15';
+  if (videoWebpPreset) videoWebpPreset.value = 'balanced';
+  applyVideoWebpPreset('balanced');
   if (videoWebpLoop) videoWebpLoop.value = '0';
   if (videoWebpMeta) videoWebpMeta.hidden = true;
   if (videoWebpLog) {

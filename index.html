@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=8" />
+  <link rel="stylesheet" href="./styles.css?v=9" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <script>
     /* 不依赖 module：按 ?tool= 立刻切面板，避免旧缓存 JS / 模块加载失败时点了没反应 */
@@ -32,7 +32,7 @@
           'app-code': { title: 'App Code', lede: '包名 + 业务类型 → 32 位可逆编码 · 本地计算', cat: '编解码' },
           base64: { title: 'Base64', lede: '文本 ↔ Base64 · UTF-8 · 本地计算', cat: '编解码' },
           'webp-json': { title: 'WebP → Lottie', lede: '动图/静图 WebP → Lottie JSON · 本地计算', cat: '媒体' },
-          'video-webp': { title: '视频 → WebP', lede: '批量视频抽帧 → 动画 WebP · 本地计算', cat: '媒体' },
+          'video-webp': { title: '视频 → WebP', lede: '批量视频 → 保质压缩动画 WebP · 本地计算', cat: '媒体' },
           'batch-dl': { title: '批量下载', lede: '粘贴 URL 列表 → 下载到本地文件夹或生成脚本', cat: '媒体' },
           'pkg-gen': { title: '生图立项', lede: '域名后缀.业务名.项目名 → 检查 Google Play 是否已被占用', cat: '上架' },
         }[tool];
@@ -256,29 +256,41 @@
             <span>视频文件（可多选）</span>
             <input id="video-webp-files" name="files" type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.mkv" multiple />
           </label>
+          <label class="field field--wide">
+            <span>压缩档位</span>
+            <select id="video-webp-preset" name="preset">
+              <option value="balanced" selected>保质压缩（推荐）</option>
+              <option value="smaller">更小体积</option>
+              <option value="quality">更高画质</option>
+            </select>
+          </label>
           <label class="field">
             <span>抽帧 fps</span>
-            <input id="video-webp-fps" name="fps" type="number" min="1" max="30" value="10" />
+            <input id="video-webp-fps" name="fps" type="number" min="1" max="30" value="8" />
           </label>
           <label class="field">
             <span>质量 0.1–1</span>
-            <input id="video-webp-quality" name="quality" type="number" min="0.1" max="1" step="0.05" value="0.8" />
+            <input id="video-webp-quality" name="quality" type="number" min="0.1" max="1" step="0.01" value="0.72" />
           </label>
           <label class="field">
             <span>最大宽度 px</span>
-            <input id="video-webp-max-width" name="maxWidth" type="number" min="64" max="1920" value="720" />
+            <input id="video-webp-max-width" name="maxWidth" type="number" min="64" max="1920" value="640" />
           </label>
           <label class="field">
             <span>最大帧数</span>
-            <input id="video-webp-max-frames" name="maxFrames" type="number" min="1" max="300" value="90" />
+            <input id="video-webp-max-frames" name="maxFrames" type="number" min="1" max="300" value="72" />
           </label>
           <label class="field">
             <span>最长时长 秒</span>
-            <input id="video-webp-max-sec" name="maxSec" type="number" min="0.5" max="120" step="0.5" value="15" />
+            <input id="video-webp-max-sec" name="maxSec" type="number" min="0.5" max="120" step="0.5" value="12" />
           </label>
           <label class="field">
             <span>循环次数（0=无限）</span>
             <input id="video-webp-loop" name="loop" type="number" min="0" max="65535" value="0" />
+          </label>
+          <label class="field field--check">
+            <input id="video-webp-skip-similar" type="checkbox" checked />
+            <span>跳过近似重复帧（省体积、保观感）</span>
           </label>
           <div class="controls controls--form">
             <button type="submit" class="btn btn--primary" id="video-webp-run">转换并下载</button>
@@ -301,9 +313,9 @@
       </div>
 
       <p class="spec">
-        批量将 <code>mp4 / webm / mov</code> 等视频抽帧并编码为<strong>动画 WebP</strong>。默认最多 15 秒、90 帧、宽边 720。
-        需 Chrome / Edge（支持 canvas WebP 编码）。全部在浏览器本地完成，不上传。
-        「转换到文件夹」需 File System Access；否则用「转换并下载」逐个保存。
+        批量将 <code>mp4 / webm / mov</code> 等视频抽帧并编码为<strong>动画 WebP</strong>。
+        默认<strong>保质压缩</strong>：高质量缩放、跳过近似重复帧、体积超标时自动下调质量（不低于下限）。
+        推荐档：8 fps · q≈0.72 · 宽边 ≤640 · ≤72 帧 · ≤12 秒。需 Chrome / Edge。本地计算，不上传。
       </p>
     </section>
 
@@ -435,6 +447,6 @@
     </footer>
   </main>
 
-  <script type="module" src="./app.js?v=8"></script>
+  <script type="module" src="./app.js?v=9"></script>
 </body>
 </html>
