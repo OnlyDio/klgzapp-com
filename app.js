@@ -2,6 +2,12 @@ import { APP_TYPES, formatAppTypeLabel, encodeAppCode, decodeAppCode } from './c
 import { webpFileToJson } from './webp-json.js';
 import { parseUrlList, sliceRange, buildPythonScript, downloadToDirectory } from './batch-dl.js';
 import {
+  convertVideosBatch,
+  writeBlobToDirectory,
+  downloadBlob,
+  supportsVideoToWebp,
+} from './video-webp.js';
+import {
   IMAGE_APP_TYPE,
   titleCaseName,
   packageFromName,
@@ -25,6 +31,11 @@ const TOOLS = {
     lede: '动图/静图 WebP → Lottie JSON · 本地计算',
     catLabel: '媒体',
   },
+  'video-webp': {
+    title: '视频 → WebP',
+    lede: '批量视频抽帧 → 动画 WebP · 本地计算',
+    catLabel: '媒体',
+  },
   'batch-dl': {
     title: '批量下载',
     lede: '粘贴 URL 列表 → 下载到本地文件夹或生成脚本',
@@ -32,7 +43,7 @@ const TOOLS = {
   },
   'pkg-gen': {
     title: '生图立项',
-    lede: '项目名 + 包名 → 检查 Google Play 是否已被占用',
+    lede: '域名后缀.业务名.项目名 → 检查 Google Play 是否已被占用',
     catLabel: '上架',
   },
 };
@@ -421,6 +432,218 @@ webpClear?.addEventListener('click', () => {
   if (webpJsonStatus) webpJsonStatus.textContent = '已清除';
 });
 
+
+/* ——— 批量视频 → WebP ——— */
+
+const videoWebpForm = document.getElementById('video-webp-form');
+const videoWebpFiles = document.getElementById('video-webp-files');
+const videoWebpFps = document.getElementById('video-webp-fps');
+const videoWebpQuality = document.getElementById('video-webp-quality');
+const videoWebpMaxWidth = document.getElementById('video-webp-max-width');
+const videoWebpMaxFrames = document.getElementById('video-webp-max-frames');
+const videoWebpMaxSec = document.getElementById('video-webp-max-sec');
+const videoWebpLoop = document.getElementById('video-webp-loop');
+const videoWebpRun = document.getElementById('video-webp-run');
+const videoWebpFolder = document.getElementById('video-webp-folder');
+const videoWebpClear = document.getElementById('video-webp-clear');
+const videoWebpMeta = document.getElementById('video-webp-meta');
+const videoWebpMetaCount = document.getElementById('video-webp-meta-count');
+const videoWebpMetaProgress = document.getElementById('video-webp-meta-progress');
+const videoWebpMetaStats = document.getElementById('video-webp-meta-stats');
+const videoWebpLog = document.getElementById('video-webp-log');
+const videoWebpStatus = document.getElementById('video-webp-status');
+const videoWebpPreview = document.getElementById('video-webp-preview');
+const videoWebpPreviewImg = document.getElementById('video-webp-preview-img');
+
+let videoWebpPreviewUrl = '';
+
+function revokeVideoWebpPreview() {
+  if (videoWebpPreviewUrl) {
+    URL.revokeObjectURL(videoWebpPreviewUrl);
+    videoWebpPreviewUrl = '';
+  }
+}
+
+function videoWebpOpts() {
+  return {
+    fps: Number(videoWebpFps?.value) || 10,
+    quality: Number(videoWebpQuality?.value) || 0.8,
+    maxWidth: Number(videoWebpMaxWidth?.value) || 720,
+    maxFrames: Number(videoWebpMaxFrames?.value) || 90,
+    maxDurationSec: Number(videoWebpMaxSec?.value) || 15,
+    loopCount: Number(videoWebpLoop?.value) || 0,
+  };
+}
+
+function selectedVideoFiles() {
+  return Array.from(videoWebpFiles?.files || []);
+}
+
+function setVideoWebpBusy(busy) {
+  if (videoWebpRun) videoWebpRun.disabled = busy;
+  if (videoWebpFolder) videoWebpFolder.disabled = busy;
+  if (videoWebpFiles) videoWebpFiles.disabled = busy;
+}
+
+function appendVideoWebpLog(item) {
+  if (!videoWebpLog) return;
+  videoWebpLog.hidden = false;
+  const li = document.createElement('li');
+  li.className = `dl-log__item dl-log__item--${item.status}`;
+  const label = item.status === 'ok' ? '完成' : '失败';
+  const extra = item.detail ? ` · ${item.detail}` : '';
+  li.textContent = `${String(item.index).padStart(3, '0')} ${label} ${item.name}${extra}`;
+  videoWebpLog.append(li);
+}
+
+function showVideoWebpPreview(blob) {
+  revokeVideoWebpPreview();
+  videoWebpPreviewUrl = URL.createObjectURL(blob);
+  if (videoWebpPreviewImg) videoWebpPreviewImg.src = videoWebpPreviewUrl;
+  if (videoWebpPreview) videoWebpPreview.hidden = false;
+}
+
+async function runVideoWebpBatch({ toFolder }) {
+  if (videoWebpStatus) videoWebpStatus.textContent = '';
+  if (videoWebpLog) {
+    videoWebpLog.replaceChildren();
+    videoWebpLog.hidden = true;
+  }
+  if (videoWebpPreview) videoWebpPreview.hidden = true;
+  revokeVideoWebpPreview();
+
+  if (!supportsVideoToWebp()) {
+    if (videoWebpStatus) videoWebpStatus.textContent = '当前浏览器无法编码 WebP，请使用 Chrome / Edge';
+    return;
+  }
+
+  const files = selectedVideoFiles();
+  if (!files.length) {
+    if (videoWebpStatus) videoWebpStatus.textContent = '请先选择一个或多个视频文件';
+    return;
+  }
+
+  let dirHandle = null;
+  if (toFolder) {
+    if (!window.showDirectoryPicker) {
+      if (videoWebpStatus) {
+        videoWebpStatus.textContent = '当前浏览器不支持选择文件夹，请改用「转换并下载」';
+      }
+      return;
+    }
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        if (videoWebpStatus) videoWebpStatus.textContent = '已取消选择文件夹';
+        return;
+      }
+      if (videoWebpStatus) videoWebpStatus.textContent = err instanceof Error ? err.message : String(err);
+      return;
+    }
+  }
+
+  if (videoWebpMetaCount) videoWebpMetaCount.textContent = `${files.length} 个`;
+  if (videoWebpMetaProgress) videoWebpMetaProgress.textContent = `0 / ${files.length}`;
+  if (videoWebpMetaStats) videoWebpMetaStats.textContent = '—';
+  if (videoWebpMeta) videoWebpMeta.hidden = false;
+
+  const stats = { ok: 0, err: 0 };
+  setVideoWebpBusy(true);
+  if (videoWebpStatus) videoWebpStatus.textContent = '转换中…';
+
+  try {
+    await convertVideosBatch(
+      files,
+      {
+        ...videoWebpOpts(),
+        onProgress(info) {
+          if (videoWebpStatus && info.message) videoWebpStatus.textContent = info.message;
+        },
+      },
+      {
+        onFileDone: async ({ index, total, file, result, error }) => {
+          if (result) {
+            stats.ok += 1;
+            const meta = result.meta;
+            const detail = `${meta.width}×${meta.height} · ${meta.frameCount} 帧 · ${(result.blob.size / 1024).toFixed(1)} KB${
+              meta.truncated ? ' · 已截断' : ''
+            }`;
+            appendVideoWebpLog({ index, name: result.fileName, status: 'ok', detail });
+            showVideoWebpPreview(result.blob);
+            if (dirHandle) {
+              await writeBlobToDirectory(dirHandle, result.fileName, result.blob);
+            } else {
+              downloadBlob(result.blob, result.fileName);
+            }
+          } else {
+            stats.err += 1;
+            appendVideoWebpLog({ index, name: file.name, status: 'err', detail: error || '失败' });
+          }
+          if (videoWebpMetaProgress) videoWebpMetaProgress.textContent = `${index} / ${total}`;
+          if (videoWebpMetaStats) videoWebpMetaStats.textContent = `成功 ${stats.ok} · 失败 ${stats.err}`;
+        },
+      },
+    );
+
+    if (videoWebpStatus) {
+      videoWebpStatus.textContent = stats.err
+        ? `完成 · 成功 ${stats.ok} · 失败 ${stats.err}`
+        : `完成 · 成功 ${stats.ok} 个 WebP${dirHandle ? '（已写入文件夹）' : '（已触发下载）'}`;
+    }
+  } catch (err) {
+    if (videoWebpStatus) videoWebpStatus.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setVideoWebpBusy(false);
+  }
+}
+
+videoWebpFiles?.addEventListener('change', () => {
+  const files = selectedVideoFiles();
+  if (videoWebpMetaCount) videoWebpMetaCount.textContent = files.length ? `${files.length} 个` : '—';
+  if (videoWebpMetaProgress) videoWebpMetaProgress.textContent = '待开始';
+  if (videoWebpMetaStats) videoWebpMetaStats.textContent = '—';
+  if (videoWebpMeta) videoWebpMeta.hidden = !files.length;
+  if (videoWebpLog) {
+    videoWebpLog.replaceChildren();
+    videoWebpLog.hidden = true;
+  }
+  if (videoWebpPreview) videoWebpPreview.hidden = true;
+  revokeVideoWebpPreview();
+  if (videoWebpStatus) {
+    videoWebpStatus.textContent = files.length
+      ? `已选择 ${files.length} 个视频`
+      : '';
+  }
+});
+
+videoWebpForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await runVideoWebpBatch({ toFolder: false });
+});
+
+videoWebpFolder?.addEventListener('click', async () => {
+  await runVideoWebpBatch({ toFolder: true });
+});
+
+videoWebpClear?.addEventListener('click', () => {
+  videoWebpForm?.reset();
+  if (videoWebpFps) videoWebpFps.value = '10';
+  if (videoWebpQuality) videoWebpQuality.value = '0.8';
+  if (videoWebpMaxWidth) videoWebpMaxWidth.value = '720';
+  if (videoWebpMaxFrames) videoWebpMaxFrames.value = '90';
+  if (videoWebpMaxSec) videoWebpMaxSec.value = '15';
+  if (videoWebpLoop) videoWebpLoop.value = '0';
+  if (videoWebpMeta) videoWebpMeta.hidden = true;
+  if (videoWebpLog) {
+    videoWebpLog.replaceChildren();
+    videoWebpLog.hidden = true;
+  }
+  if (videoWebpPreview) videoWebpPreview.hidden = true;
+  revokeVideoWebpPreview();
+  if (videoWebpStatus) videoWebpStatus.textContent = '已清除';
+});
+
 /* ——— 批量下载 ——— */
 
 const batchForm = document.getElementById('batch-dl-form');
@@ -588,6 +811,15 @@ const pkgCheckName = document.getElementById('pkg-check-name');
 const pkgCheckPkg = document.getElementById('pkg-check-pkg');
 const pkgCheckStatus = document.getElementById('pkg-check-status');
 const pkgUsedNames = new Set();
+const pkgUsedBusiness = new Set();
+
+function pkgPackageOptions() {
+  return {
+    tld: document.getElementById('pkg-gen-tld')?.value || undefined,
+    business: document.getElementById('pkg-gen-biz')?.value || undefined,
+    usedBusiness: pkgUsedBusiness,
+  };
+}
 
 function occupancyLabel(row) {
   if (row.occupied === true) return { text: '已被占用', kind: 'taken' };
@@ -684,9 +916,9 @@ function appendPkgCard(row, prepend = true) {
 function syncCheckPackage() {
   const name = titleCaseName(pkgCheckName?.value || '');
   if (!name || !pkgCheckPkg) return;
-  const pattern = document.getElementById('pkg-gen-pattern')?.value || 'com.android';
+  const pattern = document.getElementById('pkg-gen-pattern')?.value || 'tld.biz.project';
   try {
-    pkgCheckPkg.value = packageFromName(name, pattern);
+    pkgCheckPkg.value = packageFromName(name, pattern, pkgPackageOptions());
   } catch {
     /* 输入未完成时不提示 */
   }
@@ -699,6 +931,8 @@ pkgCheckName?.addEventListener('blur', () => {
   syncCheckPackage();
 });
 document.getElementById('pkg-gen-pattern')?.addEventListener('change', syncCheckPackage);
+document.getElementById('pkg-gen-tld')?.addEventListener('change', syncCheckPackage);
+document.getElementById('pkg-gen-biz')?.addEventListener('input', syncCheckPackage);
 
 pkgGenForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -708,8 +942,11 @@ pkgGenForm?.addEventListener('submit', async (event) => {
     const result = await generateAvailableApps({
       count: Number(document.getElementById('pkg-gen-count')?.value) || 3,
       seed: document.getElementById('pkg-gen-seed')?.value || '',
-      pattern: document.getElementById('pkg-gen-pattern')?.value || 'com.android',
+      pattern: document.getElementById('pkg-gen-pattern')?.value || 'tld.biz.project',
+      tld: document.getElementById('pkg-gen-tld')?.value || '',
+      business: document.getElementById('pkg-gen-biz')?.value || '',
       usedNames: pkgUsedNames,
+      usedBusiness: pkgUsedBusiness,
       onProgress({ phase, name, packageName, found, want, row }) {
         if (phase === 'checking' && pkgGenStatus) {
           pkgGenStatus.textContent = `正在查 ${name} / ${packageName} · 已找到 ${found}/${want}`;
@@ -735,13 +972,13 @@ pkgCheckForm?.addEventListener('submit', async (event) => {
   try {
     const typedName = titleCaseName(pkgCheckName?.value || '');
     let packageName = (pkgCheckPkg?.value || '').trim().toLowerCase();
-    const pattern = document.getElementById('pkg-gen-pattern')?.value || 'com.android';
-    if (!packageName && typedName) packageName = packageFromName(typedName, pattern);
+    const pattern = document.getElementById('pkg-gen-pattern')?.value || 'tld.biz.project';
+    if (!packageName && typedName) packageName = packageFromName(typedName, pattern, pkgPackageOptions());
     if (typedName && pkgCheckName) pkgCheckName.value = typedName;
     if (pkgCheckPkg) pkgCheckPkg.value = packageName;
     const check = await checkPlayOccupancy(packageName);
     const row = {
-      name: typedName || titleCaseName(packageName.split('.')[1] || '') || 'Custom',
+      name: typedName || titleCaseName(packageName.split('.').at(-1) || '') || 'Custom',
       packageName,
       ...check,
     };
@@ -761,6 +998,7 @@ pkgGenClear?.addEventListener('click', () => {
   pkgGenForm?.reset();
   pkgCheckForm?.reset();
   pkgUsedNames.clear();
+  pkgUsedBusiness.clear();
   const count = document.getElementById('pkg-gen-count');
   if (count) count.value = '3';
   if (pkgGenList) {

@@ -13,6 +13,7 @@ const RESERVED_SLUGS = new Set([
   'openai', 'lensa', 'prisma', 'picsart', 'vsco', 'lightroom', 'photoleap',
   'wonder', 'starryai', 'leonardo', 'runway', 'kling', 'chatgpt', 'gemini',
   'apple', 'samsung', 'facebook', 'whatsapp', 'tiktok', 'youtube',
+  'voya', 'nyra', 'relm', 'oryn', 'sable', 'eira', 'faylo', 'lumi', 'mira',
 ]);
 
 const STEMS = [
@@ -29,7 +30,15 @@ const TAILS = [
   'or', 'ico', 'ara', 'elle', 'ette', 'yne', 'ora', 'een', 'ify', 'ory',
 ];
 
+export const PACKAGE_TLDS = ['com', 'ai', 'io', 'app', 'me'];
+
+export const BUSINESS_SLUGS = [
+  'lore', 'myth', 'viso', 'tale', 'inka', 'veil', 'canto', 'astra',
+  'ember', 'mist', 'halo', 'iris', 'rune', 'glow', 'nimbus',
+];
+
 const PACKAGE_PATTERNS = {
+  'tld.biz.project': null,
   'com.android': (slug) => `com.${slug}.android`,
   'com.app': (slug) => `com.${slug}.app`,
   'ai.app': (slug) => `ai.${slug}.app`,
@@ -49,11 +58,37 @@ export function isValidAndroidPackage(pkg) {
   return /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,}$/.test(String(pkg || ''));
 }
 
-export function packageFromName(name, pattern = 'com.android') {
-  const slug = slugFromName(name);
-  if (slug.length < 3) throw new Error('项目名至少 3 个英文字母');
-  const build = PACKAGE_PATTERNS[pattern] || PACKAGE_PATTERNS['com.android'];
-  const pkg = build(slug);
+function pickBusinessSlug(used = new Set()) {
+  const pool = BUSINESS_SLUGS.filter((item) => !used.has(item) && !RESERVED_SLUGS.has(item));
+  if (pool.length) {
+    const chosen = pick(pool);
+    used.add(chosen);
+    return chosen;
+  }
+  const fallback = generateProjectName('', used);
+  const slug = slugFromName(fallback);
+  used.add(slug);
+  return slug;
+}
+
+export function buildPackage(tld, business, project) {
+  const pkg = [tld, business, project].map((part) => slugFromName(part)).join('.');
+  if (!isValidAndroidPackage(pkg)) throw new Error('包名不合法');
+  return pkg;
+}
+
+export function packageFromName(name, pattern = 'tld.biz.project', options = {}) {
+  const project = slugFromName(name);
+  if (project.length < 3) throw new Error('项目名至少 3 个英文字母');
+  if (pattern === 'tld.biz.project' || !PACKAGE_PATTERNS[pattern]) {
+    const tld = slugFromName(options.tld || pick(PACKAGE_TLDS));
+    const business = options.business
+      ? slugFromName(options.business)
+      : pickBusinessSlug(options.usedBusiness || new Set());
+    if (!tld || business.length < 3) throw new Error('域名后缀或业务名无效');
+    return buildPackage(tld, business, project);
+  }
+  const pkg = PACKAGE_PATTERNS[pattern](project);
   if (!isValidAndroidPackage(pkg)) throw new Error('包名不合法');
   return pkg;
 }
@@ -142,7 +177,7 @@ async function fetchText(url, timeoutMs = 18000) {
 
 export async function checkPlayOccupancy(packageName) {
   if (!isValidAndroidPackage(packageName)) {
-    throw new Error('包名格式无效（需小写，至少两段，如 com.pixora.android）');
+    throw new Error('包名格式无效（需小写，至少两段，如 ai.lore.voya）');
   }
   const playUrl = playDetailsUrl(packageName);
   const sources = [
@@ -181,8 +216,11 @@ function sleep(ms) {
 export async function generateAvailableApps({
   count = 3,
   seed = '',
-  pattern = 'com.android',
+  pattern = 'tld.biz.project',
+  tld = '',
+  business = '',
   usedNames = new Set(),
+  usedBusiness = new Set(),
   onProgress,
 } = {}) {
   const want = Math.min(12, Math.max(1, Number(count) || 1));
@@ -192,7 +230,11 @@ export async function generateAvailableApps({
 
   for (let i = 0; i < maxAttempts && found.length < want; i += 1) {
     const name = generateProjectName(seed, usedNames);
-    const packageName = packageFromName(name, pattern);
+    const packageName = packageFromName(name, pattern, {
+      tld: tld || undefined,
+      business: business || undefined,
+      usedBusiness,
+    });
     onProgress?.({ phase: 'checking', name, packageName, index: i + 1, found: found.length, want });
     const check = await checkPlayOccupancy(packageName);
     const row = { name, packageName, ...check };

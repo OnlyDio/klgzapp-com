@@ -9,10 +9,11 @@
 | **App Code** | 包名 + 业务类型 → 固定 32 位小写 Base32，可逆还原 | 默认首页 |
 | **Base64** | UTF-8 文本 ↔ Base64（可选 URL-safe） | `?tool=base64` |
 | **WebP → Lottie** | 动图/静图 WebP → Bodymovin / Lottie JSON（嵌入 PNG 帧） | `?tool=webp-json` |
+| **视频 → WebP** | 批量视频抽帧 → 动画 WebP | `?tool=video-webp` |
 | **批量下载** | 粘贴 URL 列表，下载到本地文件夹或生成 Python 脚本 | `?tool=batch-dl` |
 | **生图立项** | 生成项目名（首字母大写）+ 包名，并检查 Google Play 是否已被占用 | `?tool=pkg-gen` |
 
-顶部导航：左侧品牌；**编解码**（App Code / Base64）、**上架**（生图立项）与 **媒体**（WebP → Lottie / 批量下载）。
+顶部导航：左侧品牌；**编解码**（App Code / Base64）、**上架**（生图立项）与 **媒体**（WebP → Lottie / 视频 → WebP / 批量下载）。
 
 ---
 
@@ -50,6 +51,18 @@
 | 上限 | 默认最多导出 120 帧（可改） |
 | 运行位置 | 浏览器本地，无服务端 |
 
+
+## 视频 → WebP
+
+| 项 | 说明 |
+|---|---|
+| 输入 | 多选视频（`mp4` / `webm` / `mov` 等） |
+| 输出 | 每个视频一个**动画 WebP** |
+| 参数 | fps、质量、最大宽度、最大帧数、最长时长、循环次数 |
+| 默认 | 10 fps · 质量 0.8 · 宽边 ≤720 · ≤90 帧 · ≤15 秒 |
+| 保存 | 「转换并下载」逐个保存；或「转换到文件夹」（Chrome / Edge） |
+| 运行位置 | 浏览器本地，无服务端；需支持 canvas WebP 编码 |
+
 ## 批量下载
 
 | 项 | 说明 |
@@ -67,7 +80,7 @@
 |---|---|
 | 业务 | 固定生图：Play 类别 `ART_AND_DESIGN` |
 | 项目名 | 英文词，首字母大写、其余小写（如 `Pixora`） |
-| 包名 | 默认 `com.<slug>.android`，可选 `com.<slug>.app` / `ai.<slug>.app` |
+| 包名 | `域名后缀.业务名.项目名`（如 `ai.lore.voya`）；业务名默认每次不同；后缀 `com` / `ai` / `io` / `app` / `me` |
 | 占用检查 | 读取 Google Play 公开详情页；404 / Not Found → 未见上架；有应用标题 → 已被其他开发者占用 |
 | 局限 | Play Console 预留但未上架的包名，公开页查不到 |
 | 衔接 | 未见上架的结果可一键填入 App Code |
@@ -83,6 +96,7 @@ python3 -m http.server 8080
 打开 `http://127.0.0.1:8080`（须用 HTTP，模块脚本无法用 `file://`）。  
 Base64：`http://127.0.0.1:8080/?tool=base64`  
 WebP → Lottie：`http://127.0.0.1:8080/?tool=webp-json`  
+视频 → WebP：`http://127.0.0.1:8080/?tool=video-webp`  
 批量下载：`http://127.0.0.1:8080/?tool=batch-dl`  
 生图立项：`http://127.0.0.1:8080/?tool=pkg-gen`
 
