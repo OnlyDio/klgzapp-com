@@ -527,9 +527,14 @@ export function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = fileName;
+  a.download = fileName || 'download.webp';
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // 延后释放，避免部分浏览器把 blob: 当成导航目标
+  window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
 }
 
 export function supportsVideoToWebp() {

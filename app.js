@@ -647,12 +647,21 @@ videoWebpFiles?.addEventListener('change', () => {
   }
 });
 
-videoWebpForm?.addEventListener('submit', async (event) => {
+videoWebpForm?.addEventListener('submit', (event) => {
   event.preventDefault();
+  event.stopPropagation();
+  return false;
+});
+
+videoWebpRun?.addEventListener('click', async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
   await runVideoWebpBatch({ toFolder: false });
 });
 
-videoWebpFolder?.addEventListener('click', async () => {
+videoWebpFolder?.addEventListener('click', async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
   await runVideoWebpBatch({ toFolder: true });
 });
 

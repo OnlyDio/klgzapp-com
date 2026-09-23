@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=9" />
+  <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <script>
     /* 不依赖 module：按 ?tool= 立刻切面板，避免旧缓存 JS / 模块加载失败时点了没反应 */
@@ -251,7 +251,7 @@
     <section id="tool-video-webp" data-tool-panel="video-webp" hidden>
       <div class="panel">
         <h2 class="panel__title">批量转换</h2>
-        <form id="video-webp-form" class="form-grid">
+        <form id="video-webp-form" class="form-grid" action="#" method="post" onsubmit="return false;">
           <label class="field field--wide">
             <span>视频文件（可多选）</span>
             <input id="video-webp-files" name="files" type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.mkv" multiple />
@@ -293,7 +293,7 @@
             <span>跳过近似重复帧（省体积、保观感）</span>
           </label>
           <div class="controls controls--form">
-            <button type="submit" class="btn btn--primary" id="video-webp-run">转换并下载</button>
+            <button type="button" class="btn btn--primary" id="video-webp-run">转换并下载</button>
             <button type="button" class="btn btn--ghost" id="video-webp-folder">转换到文件夹</button>
             <button type="button" class="btn btn--ghost" id="video-webp-clear">清除</button>
           </div>
@@ -447,6 +447,6 @@
     </footer>
   </main>
 
-  <script type="module" src="./app.js?v=9"></script>
+  <script type="module" src="./app.js?v=10"></script>
 </body>
 </html>
