@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=10" />
+  <link rel="stylesheet" href="./styles.css?v=12" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <script>
     /* 不依赖 module：按 ?tool= 立刻切面板，避免旧缓存 JS / 模块加载失败时点了没反应 */
@@ -251,7 +251,7 @@
     <section id="tool-video-webp" data-tool-panel="video-webp" hidden>
       <div class="panel">
         <h2 class="panel__title">批量转换</h2>
-        <form id="video-webp-form" class="form-grid" action="#" method="post" onsubmit="return false;">
+        <div id="video-webp-form" class="form-grid" role="group" aria-label="批量视频转 WebP">
           <label class="field field--wide">
             <span>视频文件（可多选）</span>
             <input id="video-webp-files" name="files" type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.mkv" multiple />
@@ -297,7 +297,7 @@
             <button type="button" class="btn btn--ghost" id="video-webp-folder">转换到文件夹</button>
             <button type="button" class="btn btn--ghost" id="video-webp-clear">清除</button>
           </div>
-        </form>
+        </div>
 
         <dl class="decode-card" id="video-webp-meta" hidden>
           <div><dt>已选</dt><dd id="video-webp-meta-count">—</dd></div>
@@ -447,6 +447,6 @@
     </footer>
   </main>
 
-  <script type="module" src="./app.js?v=10"></script>
+  <script type="module" src="./app.js?v=12"></script>
 </body>
 </html>

@@ -207,12 +207,84 @@ function waitEvent(target, event, errorEvent = 'error') {
   });
 }
 
+/** 等浏览器真正产出一帧画面（避免 seek 后立刻 draw 得到黑帧） */
+function waitVideoFrame(video) {
+  return new Promise((resolve) => {
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      const id = video.requestVideoFrameCallback(() => resolve());
+      // 个别环境 rVFC 不回调时兜底
+      window.setTimeout(() => {
+        try {
+          video.cancelVideoFrameCallback?.(id);
+        } catch {
+          /* ignore */
+        }
+        resolve();
+      }, 120);
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+function isCanvasMostlyBlack(ctx, width, height) {
+  const sw = Math.min(32, width);
+  const sh = Math.min(32, height);
+  const { data } = ctx.getImageData(0, 0, sw, sh);
+  let lit = 0;
+  const total = sw * sh;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] + data[i + 1] + data[i + 2] > 24) lit += 1;
+  }
+  return lit / total < 0.02;
+}
+
+/**
+ * seek 到目标时间并等到可绘制帧。
+ * 注意：currentTime≈0 时许多 MP4 尚未解码，直接 drawImage 会得到黑屏。
+ */
 async function seekVideo(video, time) {
-  const t = Math.max(0, Math.min(time, Math.max(0, (video.duration || 0) - 0.001)));
-  if (Math.abs(video.currentTime - t) < 0.0005) return;
-  const done = waitEvent(video, 'seeked');
-  video.currentTime = t;
-  await done;
+  const maxT = Math.max(0, (video.duration || 0) - 0.001);
+  let t = Math.max(0, Math.min(time, maxT));
+  // 避开精确 0：部分编码器首包黑帧，略微前移
+  if (t < 0.04 && maxT > 0.04) t = 0.04;
+
+  if (video.readyState < 2) {
+    try {
+      await Promise.race([
+        waitEvent(video, 'loadeddata'),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+    } catch {
+      /* continue */
+    }
+  }
+
+  const needSeek = Math.abs(video.currentTime - t) >= 0.001;
+  if (needSeek) {
+    const done = waitEvent(video, 'seeked');
+    video.currentTime = t;
+    try {
+      await Promise.race([done, new Promise((r) => setTimeout(r, 2000))]);
+    } catch {
+      /* continue and still wait a painted frame */
+    }
+  }
+  await waitVideoFrame(video);
+}
+
+async function drawVideoFrame(video, ctx, width, height) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(video, 0, 0, width, height);
+  // 首帧仍黑：再略微前移重试
+  if (isCanvasMostlyBlack(ctx, width, height)) {
+    const maxT = Math.max(0, (video.duration || 0) - 0.001);
+    const bump = Math.min(maxT, Math.max(video.currentTime + 0.08, 0.08));
+    await seekVideo(video, bump);
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(video, 0, 0, width, height);
+  }
 }
 
 function canvasToWebpBuffer(canvas, quality) {
@@ -346,15 +418,26 @@ export async function videoFileToAnimatedWebp(file, opts = {}) {
     if (!Number.isFinite(video.duration) || video.duration <= 0) {
       throw new Error('无法读取视频时长（部分编码需转码后再试）');
     }
+    try {
+      await Promise.race([
+        waitEvent(video, 'loadeddata'),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+    } catch {
+      /* ignore */
+    }
+    // 预热解码，避免第一帧黑屏
+    await seekVideo(video, 0.04);
 
     const duration = Math.min(video.duration, maxDurationSec);
     const interval = 1 / fps;
     /** @type {number[]} */
     const times = [];
     for (let t = 0; t < duration && times.length < maxFrames; t += interval) {
-      times.push(t);
+      // 首采样避开 0s 黑帧
+      times.push(t < 0.04 ? Math.min(0.04, Math.max(0, duration - 0.001)) : t);
     }
-    if (!times.length) times.push(0);
+    if (!times.length) times.push(Math.min(0.04, Math.max(0, duration - 0.001)));
     const last = Math.max(0, duration - 0.001);
     if (times.length < maxFrames && last - times[times.length - 1] > interval * 0.35) {
       times.push(last);
@@ -398,7 +481,7 @@ export async function videoFileToAnimatedWebp(file, opts = {}) {
           message: `${name} · 抽帧 ${i + 1}/${times.length} · q=${q.toFixed(2)}`,
         });
         await seekVideo(video, times[i]);
-        ctx.drawImage(video, 0, 0, width, height);
+        await drawVideoFrame(video, ctx, width, height);
 
         const fp = skipSimilar ? frameFingerprint(ctx, width, height) : null;
         if (skipSimilar && frames.length && fingerprintsSimilar(prevFp, fp, similarThreshold)) {

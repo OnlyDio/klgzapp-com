@@ -647,29 +647,43 @@ videoWebpFiles?.addEventListener('change', () => {
   }
 });
 
-videoWebpForm?.addEventListener('submit', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  return false;
+function ensureVideoWebpRoute() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('tool') !== 'video-webp') {
+    url.searchParams.set('tool', 'video-webp');
+    window.history.replaceState({}, '', url);
+  }
+  document.documentElement.setAttribute('data-active-tool', 'video-webp');
+}
+
+videoWebpForm?.addEventListener('keydown', (event) => {
+  // 数字框回车不再触发表单式跳转
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 });
 
 videoWebpRun?.addEventListener('click', async (event) => {
   event.preventDefault();
   event.stopPropagation();
+  ensureVideoWebpRoute();
   await runVideoWebpBatch({ toFolder: false });
 });
 
 videoWebpFolder?.addEventListener('click', async (event) => {
   event.preventDefault();
   event.stopPropagation();
+  ensureVideoWebpRoute();
   await runVideoWebpBatch({ toFolder: true });
 });
 
 videoWebpClear?.addEventListener('click', () => {
-  videoWebpForm?.reset();
+  if (videoWebpFiles) videoWebpFiles.value = '';
   if (videoWebpPreset) videoWebpPreset.value = 'balanced';
   applyVideoWebpPreset('balanced');
   if (videoWebpLoop) videoWebpLoop.value = '0';
+  if (videoWebpSkipSimilar) videoWebpSkipSimilar.checked = true;
   if (videoWebpMeta) videoWebpMeta.hidden = true;
   if (videoWebpLog) {
     videoWebpLog.replaceChildren();
